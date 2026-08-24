@@ -44,7 +44,7 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 | `/leaderboard` | `&leaderboard` | Top 10 des niveaux |
 | `/levelrole niveau rôle` | `&levelrole <niveau> <rôle>` | Configurer un rôle de récompense (admin) |
 | `/levelroles` | `&levelroles` | Voir les huit rôles de niveau |
-| `/ticketrole type rôle` | `&ticketrole <type> <rôle>` | Définir le rôle alerté par type de ticket (admin) |
+| `/ticketrole type rôle` | `&ticketrole <type> <rôle>` | Définir le rôle ayant accès par type de ticket (admin) |
 | `/ticketcategory catégorie` | `&ticketcategory <catégorie>` | Définir la catégorie Discord des tickets (admin) |
 | `/ticketpanel` | `&ticketpanel` | Publier le panneau Components V2 (admin) |
 | `/ticketclose` | `&ticketclose` | Fermer un ticket |
@@ -79,7 +79,7 @@ Les contrôles reposent sur les noms de rôle exacts **Administrateur** et **Éq
 
 ## Système de tickets
 
-Le panneau Components V2 propose : Ticket Fondation, Ticket Légal, Ticket Illégal, Ticket report Staff, Ticket Report Joueur, Ticket Question, Ticket Unban et Ticket Build. Chaque type possède son propre rôle d’alerte, qui obtient aussi accès au salon privé.
+Le panneau Components V2 propose : Ticket Fondation, Ticket Légal, Ticket Illégal, Ticket report Staff, Ticket Report Joueur, Ticket Question, Ticket Unban et Ticket Build. Chaque type possède son propre rôle d’accès, qui peut consulter et répondre dans le salon privé. Le bot n’envoie aucune mention ni notification automatique.
 
 Configuration administrateur :
 
@@ -87,4 +87,4 @@ Configuration administrateur :
 2. Configurez un rôle différent pour **chacun** des huit types avec `/ticketrole`. Par exemple : `/ticketrole type:legal role:@Équipe Légale`.
 3. Dans le salon où les joueurs doivent ouvrir leurs demandes, lancez `/ticketpanel`.
 
-Un Ticket report Staff ouvre d’abord une sélection Components V2 permettant de choisir un ou plusieurs membres portant le rôle **Équipe Staff**. Les personnes signalées sont listées dans le ticket, sans être notifiées. Le rôle d’alerte configuré pour ce type est le seul rôle automatiquement pingé. Le panneau de tickets affiche le GIF `ticket.gif` sous son texte.
+Un Ticket report Staff ouvre d’abord une sélection Components V2 permettant de choisir un ou plusieurs membres portant le rôle **Équipe Staff**. Les personnes signalées sont listées dans le ticket, sans être notifiées. Le panneau de tickets affiche le GIF `ticket.gif`, encadré par un texte d’introduction et un texte d’information professionnel.

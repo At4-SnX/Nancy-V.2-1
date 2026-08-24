@@ -17,7 +17,10 @@ const config = guildId => {
   return guildConfig;
 };
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildVoiceStates] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildVoiceStates],
+  allowedMentions: { parse: [], repliedUser: false }
+});
 const dangerPerms = PermissionFlagsBits.Administrator | PermissionFlagsBits.ManageGuild | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.ManageRoles | PermissionFlagsBits.BanMembers | PermissionFlagsBits.KickMembers | PermissionFlagsBits.ModerateMembers;
 const staffCommands = new Set(['ping', 'help', 'rank', 'leaderboard', 'kick', 'mute', 'unmute', 'clear', 'lock', 'unlock', 'slowmode', 'ticketclose']);
 const levelMilestones = [1, 10, 20, 30, 40, 50, 60, 70];
@@ -163,9 +166,10 @@ function ticketPanel() {
     flags: 32_768,
     components: [{ type: 17, accent_color: 0x1e4d70, components: [
       { type: 10, content: '## 🎫 Centre de support • Nancy RP V.2' },
-      { type: 10, content: 'Sélectionne la catégorie correspondant à ta demande. Un salon privé sera créé et l’équipe concernée sera alertée.' },
+      { type: 10, content: 'Bienvenue au centre de support. Sélectionnez avec attention la catégorie correspondant à votre demande afin que votre dossier soit orienté vers l’équipe compétente.' },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
       { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: '### Informations importantes\nVotre demande ouvrira un salon privé. Décrivez votre situation avec précision et joignez, si nécessaire, les éléments utiles à son traitement. Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais.' },
       { type: 1, components: [{ type: 3, custom_id: 'ticket:create', placeholder: 'Choisir une catégorie de ticket', options: Object.entries(ticketTypes).map(([value, label]) => ({ label, value })) }] }
     ] }],
     files: [new AttachmentBuilder('assets/ticket.gif', { name: 'ticket.gif' })]
@@ -177,6 +181,7 @@ async function createTicket(guild, owner, type, reportedStaff = []) {
   if (alreadyOpen) return { error: `Tu as déjà un **${ticketTypes[type]}** ouvert.` };
   const alertRoleId = tickets.roles[type];
   if (!alertRoleId) return { error: `Le rôle d’alerte du **${ticketTypes[type]}** n’est pas encore configuré.` };
+  if (alertRoleId === guild.roles.everyone.id) return { error: 'Le rôle d’alerte ne peut pas être @everyone. Configurez un rôle dédié pour ce type de ticket.' };
   const categoryId = ticketCategoryId(tickets, type);
   if (!categoryId) return { error: 'La catégorie des tickets n’est pas encore configurée dans les variables Railway.' };
   const overwrites = [
@@ -188,13 +193,13 @@ async function createTicket(guild, owner, type, reportedStaff = []) {
   const safeName = owner.user.username.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 30) || owner.id;
   const channel = await guild.channels.create({ name: `ticket-${type.replace('_', '-')}-${safeName}`, type: ChannelType.GuildText, parent: categoryId, permissionOverwrites: overwrites, reason: `${ticketTypes[type]} créé par ${owner.user.tag}` });
   tickets.open[channel.id] = { ownerId: owner.id, type, reportedStaff, createdAt: Date.now() }; save();
-  if (alertRoleId) await channel.send({ content: `<@&${alertRoleId}>`, allowedMentions: { roles: [alertRoleId] } }).catch(() => {});
+  const alertRole = await guild.roles.fetch(alertRoleId).catch(() => null);
   const reportedText = reportedStaff.length ? `\n\n**Membre(s) du staff signalé(s) :** ${reportedStaff.map(id => `<@${id}>`).join(', ')}` : '';
   await channel.send({
     flags: 32_768,
     components: [{ type: 17, accent_color: 0x1e4d70, components: [
       { type: 10, content: `## ${ticketTypes[type]}` },
-      { type: 10, content: `Bienvenue ${owner}. Explique ta demande de façon précise ; l’équipe concernée te répondra ici.${reportedText}` },
+      { type: 10, content: `Bienvenue ${owner}. Votre dossier a été créé avec succès. Présentez votre demande de manière précise et structurée ; l’équipe **${alertRole?.name ?? 'concernée'}** sera informée sans recevoir de notification intrusive.${reportedText}` },
       { type: 14, divider: true, spacing: 1 },
       { type: 1, components: [{ type: 2, style: 4, custom_id: 'ticket:close', label: 'Fermer le ticket' }] }
     ] }]
@@ -264,9 +269,9 @@ async function execute(ctx, command, args, slash = false) {
     const type = (slash ? ctx.options.getString('type') : args[0])?.toLowerCase();
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[1]);
     const role = await guild.roles.fetch(roleId).catch(() => null);
-    if (!ticketTypes[type] || !role || role.managed) return reply(ctx, 'Usage : ticketrole <fondation|legal|illegal|report_staff|report_joueur|question|unban|build> <rôle>', true);
+    if (!ticketTypes[type] || !role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Choisissez un rôle dédié valide ; le rôle @everyone ne peut pas être utilisé pour les tickets.', true);
     ticketConfig(guild.id).roles[type] = role.id; save();
-    return reply(ctx, `${role} sera alerté pour les **${ticketTypes[type]}**.`);
+    return reply(ctx, `Le rôle ${role} disposera de l’accès aux dossiers de type **${ticketTypes[type]}**. Aucune notification automatique ne sera envoyée.`);
   }
   if (command === 'ticketcategory') {
     const categoryId = slash ? ctx.options.getChannel('categorie')?.id : targetId(args[0]);
