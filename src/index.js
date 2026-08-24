@@ -169,7 +169,7 @@ function ticketPanel() {
       { type: 10, content: 'Bienvenue au centre de support. Sélectionnez avec attention la catégorie correspondant à votre demande afin que votre dossier soit orienté vers l’équipe compétente.' },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
       { type: 14, divider: true, spacing: 1 },
-      { type: 10, content: '### Informations importantes\nVotre demande ouvrira un salon privé. Décrivez votre situation avec précision et joignez, si nécessaire, les éléments utiles à son traitement. Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais.' },
+      { type: 10, content: '### <:Nancy__25_removebgpreview:1541568070168875010> Informations importantes\n> <:Nancy23Photoroom:1541568232756879370> Votre demande ouvrira un **__salon privé__**. Décrivez votre situation avec **__précision__** et joignez, si nécessaire, les **__éléments utiles à son traitement__**. __**Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais**__.' },
       { type: 1, components: [{ type: 3, custom_id: 'ticket:create', placeholder: 'Choisir une catégorie de ticket', options: Object.entries(ticketTypes).map(([value, label]) => ({ label, value })) }] }
     ] }],
     files: [new AttachmentBuilder('assets/ticket.gif', { name: 'ticket.gif' })]
