@@ -161,28 +161,24 @@ async function enforceAntiLink(message) {
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
 }
+const ticketIntroduction = [
+  '<:Nancy23Photoroom:1541568232756879370> **__Bienvenue au centre de support__** ! Afin que votre dossier soit **__orienté vers l’équipe compétente dans les plus brefs délais__**, veuillez sélectionner avec attention la **__catégorie correspondant à votre demande__** parmi la liste ci-dessous :',
+  '> <:Nancy43Photoroom:1541572050827870349> **__Ticket Fondations__** : `Pour toute demande relative à la création, la gestion ou la validation d’une fondation (projet, entreprise ou organisation).`',
+  '> <:Nancy44Photoroom:1541572049950998638> **__Ticket Légal__** : `Destiné aux démarches, litiges ou questions concernant les activités légales (business, contrats, régulations).`',
+  '> <:Nancy45Photoroom:1541572048759947354> **__Ticket Illégal__** : `Réservé aux demandes, signalements ou interactions en lien avec les activités illégales ou le milieu criminel/gang.`',
+  '> <:Nancy46Photoroom:1541572047564439593> **__Ticket Report Staff__** : `Pour signaler un comportement inapproprié, un abus de pouvoir ou un problème concernant un membre de l’équipe de modération/administration.`',
+  '> <:Nancy46Photoroom:1541572047564439593> **__Ticket Report Joueur__** : `Pour effectuer un signalement à l’encontre d’un joueur (règlement brisé, anti-jeu, non-respect du RP, etc., preuves à l’appui).`',
+  '> <:Nancy47Photoroom:1541572046537105529> **__Ticket Question__** : `Si vous avez une interrogation générale sur le fonctionnement du serveur, le règlement ou besoin d’un renseignement.`',
+  '> <:Nancy48Photoroom:1541572045467418766> **__Ticket Unban__** : `Pour contester une sanction et effectuer une demande de débannissement auprès de la modération.`',
+  '> <:Nancy49Photoroom:1541572044397748304> **__Ticket Build__** : `Pour toute demande concernant la construction, les bugs de mapping ou l’ajout/modification de structures.`'
+].join('\n\n');
+
 function ticketPanel() {
   return {
     flags: 32_768,
     components: [{ type: 17, accent_color: 0x1e4d70, components: [
       { type: 10, content: '## <:Nancy24Photoroom:1541568231570014299> Centre de support • Nancy RP V.2' },
-      { type: 10, content: '<:Nancy23Photoroom:1541568232756879370> **__Bienvenue au centre de support__** ! Afin que votre dossier soit **__orienté vers l’équipe compétente dans les plus brefs délais__**, veuillez sélectionner avec attention la **__catégorie correspondant à votre demande__** parmi la liste ci-dessous :
-
-> <:Nancy43Photoroom:1541572050827870349> **__Ticket Fondations__** : `Pour toute demande relative à la création, la gestion ou la validation d'une fondation (projet, entreprise ou organisation).`
-
-> <:Nancy44Photoroom:1541572049950998638> **__Ticket Légal__** : `Destiné aux démarches, litiges ou questions concernant les activités légales (business, contrats, régulations).`
-
-> <:Nancy45Photoroom:1541572048759947354> **__Ticket Illégal__** : `Réservé aux demandes, signalements ou interactions en lien avec les activités illégales ou le milieu criminel/gang.`
-
-> <:Nancy46Photoroom:1541572047564439593> **__Ticket Report Staff __**: `Pour signaler un comportement inapproprié, un abus de pouvoir ou un problème concernant un membre de l'équipe de modération/administration.`
-
-> <:Nancy46Photoroom:1541572047564439593> **__Ticket Report Joueur__** : `Pour effectuer un signalement à l'encontre d'un joueur (règlement brisé, anti-jeu, non-respect du RP, etc., preuves à l'appui).`
-
-> <:Nancy47Photoroom:1541572046537105529> **__Ticket Question __**: `Si vous avez une interrogation générale sur le fonctionnement du serveur, le règlement ou besoin d'un renseignement.`
-
-> <:Nancy48Photoroom:1541572045467418766> Ticket Unban :` Pour contester une sanction (bannissement) et effectuer une demande de dé bannissement auprès de la modération.`
-
-> <:Nancy49Photoroom:1541572044397748304> **__Ticket Build__** : `Pour toute demande concernant la construction, les bugs de mapping ou l'ajout/modification de structures.`' },
+      { type: 10, content: ticketIntroduction },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: '### <:Nancy__25_removebgpreview:1541568070168875010> Informations importantes\n> <:Nancy23Photoroom:1541568232756879370> Votre demande ouvrira un **__salon privé__**. Décrivez votre situation avec **__précision__** et joignez, si nécessaire, les **__éléments utiles à son traitement__**. __**Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais**__.' },
