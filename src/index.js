@@ -13,6 +13,7 @@ const config = guildId => {
   const guildConfig = settings[guildId] ??= { antibot: false, antinuke: { enabled: false, threshold: 3, action: 'strip' } };
   guildConfig.levels ??= { roles: {}, users: {}, channelId: null };
   guildConfig.levels.roles ??= {}; guildConfig.levels.users ??= {}; guildConfig.levels.channelId ??= null;
+  guildConfig.antispam ??= { enabled: true, limit: 6, interval: 7, timeout: '10m' };
   return guildConfig;
 };
 
@@ -24,6 +25,7 @@ const maxLevel = 70;
 const xpForLevel = level => level * level * 100;
 const levelFromXp = xp => Math.min(maxLevel, Math.floor(Math.sqrt(xp / 100)));
 const voiceSessions = new Map();
+const spamMessages = new Map();
 const ticketTypes = {
   fondation: 'Ticket Fondation', legal: 'Ticket Légal', illegal: 'Ticket Illégal', report_staff: 'Ticket report Staff',
   report_joueur: 'Ticket Report Joueur', question: 'Ticket Question', unban: 'Ticket Unban', build: 'Ticket Build'
@@ -69,7 +71,7 @@ function helpComponents() { return [{ type: 17, accent_color: 0x1e4d70, componen
   { type: 10, content: '## ✦ Nancy RP V.2 • Centre de commandes' },
   { type: 10, content: 'Bienvenue dans le centre de gestion du serveur. Toutes les commandes existent aussi avec le préfixe `&`.' },
   { type: 14, divider: true, spacing: 1 },
-  { type: 10, content: `### 🛡️ Modération\n\`${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`` },
+  { type: 10, content: `### 🛡️ Modération\n\`${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
   { type: 10, content: `### 🏅 Progression\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le top 10 actualisé en direct.\nMessages : **8 à 25 XP** toutes les 20 secondes. Vocal : **4 XP toutes les 15 secondes**.` },
   { type: 10, content: `### 🎫 Tickets\nUtilise le panneau dédié pour créer un ticket. Un staff peut fermer un ticket avec \`${prefix}ticketclose\`.` },
   { type: 10, content: `-# Réservé Administrateur : antibot, antinuke, configuration niveaux et tickets. Équipe Staff : modération basique.` }
@@ -117,6 +119,26 @@ async function creditVoice(member, now = Date.now()) {
   const periods = Math.floor((now - session.creditedAt) / 15_000); if (periods < 1) return;
   session.creditedAt += periods * 15_000;
   await addXp(member, periods * 4);
+}
+async function enforceAntiSpam(message) {
+  const anti = config(message.guild.id).antispam;
+  if (!anti.enabled || has(message.member, 'antibot')) return false;
+  const key = `${message.guild.id}:${message.author.id}`; const now = Date.now();
+  const recent = (spamMessages.get(key) ?? []).filter(time => now - time < anti.interval * 1_000);
+  recent.push(now); spamMessages.set(key, recent);
+  if (recent.length < anti.limit) return false;
+  spamMessages.set(key, []);
+  await message.delete().catch(() => {});
+  const timeoutMs = duration(anti.timeout) ?? 600_000;
+  if (message.member.moderatable) await message.member.timeout(timeoutMs, `Antispam : ${anti.limit} messages en ${anti.interval} secondes`).catch(() => {});
+  await log(message.guild, `**ANTISPAM** — ${message.author.tag} sanctionné après ${anti.limit} messages en ${anti.interval} secondes.`);
+  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: 0xc0392b, components: [
+    { type: 10, content: '## ⚠️ Protection antispam' },
+    { type: 10, content: `${message.author}, tu as envoyé trop de messages trop rapidement. Un timeout de **${anti.timeout}** a été appliqué. Merci de patienter avant de reprendre la conversation.` },
+    { type: 10, content: `-# Limite configurée : ${anti.limit} messages en ${anti.interval} secondes.` }
+  ] }] }).catch(() => null);
+  if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
+  return true;
 }
 function ticketPanel() {
   return {
@@ -280,6 +302,16 @@ async function execute(ctx, command, args, slash = false) {
   if (command === 'slowmode') { const seconds = Number(slash ? ctx.options.getInteger('secondes') : args[0]); if (!Number.isInteger(seconds) || seconds < 0 || seconds > 21600 || !ctx.channel?.setRateLimitPerUser) return reply(ctx, 'Indiquez entre 0 et 21600 secondes.', true); await ctx.channel.setRateLimitPerUser(seconds); return reply(ctx, `Mode lent réglé sur ${seconds} seconde(s).`); }
   if (command === 'antibot') { const state = (slash ? ctx.options.getString('etat') : args[0])?.toLowerCase(); if (!['on', 'off'].includes(state)) return reply(ctx, 'Usage : antibot on/off', true); if (state === 'off' && actor.id !== process.env.BOT_OWNER_ID) return reply(ctx, 'Seul le propriétaire défini dans `BOT_OWNER_ID` peut désactiver l’antibot.', true); config(guild.id).antibot = state === 'on'; save(); return reply(ctx, `Antibot **${state === 'on' ? 'activé' : 'désactivé'}**.`); }
   if (command === 'antinuke') { const state = (slash ? ctx.options.getString('etat') : args[0])?.toLowerCase(); const threshold = slash ? ctx.options.getInteger('seuil') : Number(args[1] || 3); const action = (slash ? ctx.options.getString('action') : args[2] || 'strip').toLowerCase(); if (!['on', 'off'].includes(state) || !Number.isInteger(threshold) || threshold < 2 || threshold > 20 || !['strip', 'kick', 'ban'].includes(action)) return reply(ctx, 'Usage : antinuke on/off [seuil 2-20] [strip|kick|ban]', true); if (state === 'off' && actor.id !== process.env.BOT_OWNER_ID) return reply(ctx, 'Seul le propriétaire défini dans `BOT_OWNER_ID` peut désactiver l’antinuke.', true); config(guild.id).antinuke = { enabled: state === 'on', threshold, action }; save(); return reply(ctx, `Antinuke **${state === 'on' ? 'activé' : 'désactivé'}** (seuil ${threshold}, action ${action}).`); }
+  if (command === 'antispam') {
+    const state = (slash ? ctx.options.getString('etat') : args[0])?.toLowerCase();
+    const limit = Number(slash ? ctx.options.getInteger('messages') ?? 6 : args[1] ?? 6);
+    const interval = Number(slash ? ctx.options.getInteger('secondes') ?? 7 : args[2] ?? 7);
+    const timeout = slash ? ctx.options.getString('timeout') ?? '10m' : args[3] ?? '10m';
+    if (!['on', 'off'].includes(state) || !Number.isInteger(limit) || limit < 3 || limit > 15 || !Number.isInteger(interval) || interval < 2 || interval > 60 || !duration(timeout)) return reply(ctx, 'Usage : antispam on/off [3-15 messages] [2-60 secondes] [timeout, ex. 10m]', true);
+    if (state === 'off' && actor.id !== process.env.BOT_OWNER_ID) return reply(ctx, 'Seul le propriétaire défini dans `BOT_OWNER_ID` peut désactiver l’antispam.', true);
+    config(guild.id).antispam = { enabled: state === 'on', limit, interval, timeout }; save();
+    return reply(ctx, `Antispam **${state === 'on' ? 'activé' : 'désactivé'}** : ${limit} messages en ${interval} secondes → timeout ${timeout}.`);
+  }
 }
 
 client.once(Events.ClientReady, c => {
@@ -319,6 +351,7 @@ client.on(Events.InteractionCreate, async i => {
 });
 client.on(Events.MessageCreate, async m => {
   if (m.author.bot || !m.guild) return;
+  if (await enforceAntiSpam(m)) return;
   if (!m.content.startsWith(prefix) && m.content.trim().length >= 3) {
     const user = config(m.guild.id).levels.users[m.author.id] ??= { xp: 0, lastMessageAt: 0 };
     if (Date.now() - user.lastMessageAt >= 20_000) {

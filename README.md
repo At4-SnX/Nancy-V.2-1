@@ -39,6 +39,7 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 | `/slowmode secondes` | `&slowmode <secondes>` | Définir le mode lent (0–21600) |
 | `/antibot état` | `&antibot on/off` | Bannir automatiquement les bots entrants |
 | `/antinuke état seuil action` | `&antinuke on/off [seuil] [strip/kick/ban]` | Protection contre les actions de masse |
+| `/antispam état messages secondes timeout` | `&antispam on/off [messages] [secondes] [timeout]` | Configurer l’antispam |
 | `/rank [membre]` | `&rank [membre]` | Consulter un niveau et l’XP |
 | `/leaderboard` | `&leaderboard` | Top 10 des niveaux |
 | `/levelrole niveau rôle` | `&levelrole <niveau> <rôle>` | Configurer un rôle de récompense (admin) |
@@ -52,6 +53,10 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 `antinuke` surveille les créations, suppressions et modifications de salons/rôles, ainsi que les bans et kicks. Dès que le seuil d'un même auteur est atteint dans une fenêtre de 10 secondes, il applique l'action choisie. `strip` retire les rôles dangereux ; `kick` ou `ban` agit directement contre l'auteur.
 
 Seul le compte dont l’identifiant est défini dans la variable Railway `BOT_OWNER_ID` peut exécuter `antibot off` ou `antinuke off`, même si d’autres personnes possèdent le rôle Administrateur.
+
+### Antispam
+
+L’antispam est actif par défaut : **6 messages en 7 secondes** entraînent la suppression du message déclencheur et un timeout de **10 minutes**. Configurez-le avec `/antispam`, par exemple `/antispam etat:on messages:5 secondes:10 timeout:15m`. Les administrateurs ne sont pas sanctionnés par l’antispam. Comme pour les autres protections, seul `BOT_OWNER_ID` peut l’éteindre.
 
 ## Système de niveaux
 
