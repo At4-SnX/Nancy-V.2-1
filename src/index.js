@@ -60,7 +60,20 @@ function ticketCategoryId(tickets, type) {
 }
 async function log(guild, text) { const channel = process.env.LOG_CHANNEL_ID && guild.channels.cache.get(process.env.LOG_CHANNEL_ID); if (channel?.isTextBased()) await channel.send({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(text).setTimestamp()] }).catch(() => {}); }
 async function reply(ctx, text, ephemeral = false) { return ctx.reply({ content: text, ephemeral }).catch(() => ctx.channel?.send(text)); }
-const helpText = `**Nancy RP V.2 — Modération, niveaux & tickets**\n\`${prefix}ping\` · \`${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\`\n\`${prefix}mute <membre> <10m|2h|1d> [raison]\` · \`${prefix}unmute <membre>\` · \`${prefix}clear [1-100]\`\n\`${prefix}lock\` / \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\n\`${prefix}antibot on/off\` · \`${prefix}antinuke on/off [seuil] [strip|kick|ban]\`\n\`${prefix}rank [membre]\` · \`${prefix}leaderboard\` · \`${prefix}levelroles\`\nAdmin : \`${prefix}levelrole\`, \`${prefix}levelchannel\`, \`${prefix}ticketrole\`, \`${prefix}ticketcategory\`, \`${prefix}ticketpanel\`. Staff : \`${prefix}ticketclose\`. Les mêmes commandes existent avec \`/\`.`;
+async function v2Reply(ctx, components, ephemeral = false) {
+  const payload = { flags: 32_768 | (ephemeral && ctx.isChatInputCommand?.() ? 64 : 0), components };
+  return ctx.reply(payload).catch(() => ctx.channel?.send({ flags: 32_768, components }));
+}
+function progressBar(value) { const filled = Math.max(0, Math.min(10, Math.round(value * 10))); return `${'▰'.repeat(filled)}${'▱'.repeat(10 - filled)}`; }
+function helpComponents() { return [{ type: 17, accent_color: 0x1e4d70, components: [
+  { type: 10, content: '## ✦ Nancy RP V.2 • Centre de commandes' },
+  { type: 10, content: 'Bienvenue dans le centre de gestion du serveur. Toutes les commandes existent aussi avec le préfixe `&`.' },
+  { type: 14, divider: true, spacing: 1 },
+  { type: 10, content: `### 🛡️ Modération\n\`${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`` },
+  { type: 10, content: `### 🏅 Progression\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le top 10 actualisé en direct.\nMessages : **8 à 25 XP** toutes les 20 secondes. Vocal : **4 XP toutes les 15 secondes**.` },
+  { type: 10, content: `### 🎫 Tickets\nUtilise le panneau dédié pour créer un ticket. Un staff peut fermer un ticket avec \`${prefix}ticketclose\`.` },
+  { type: 10, content: `-# Réservé Administrateur : antibot, antinuke, configuration niveaux et tickets. Équipe Staff : modération basique.` }
+] }]; }
 
 async function applyLevelRoles(member, level) {
   const roles = config(member.guild.id).levels.roles;
@@ -89,7 +102,7 @@ async function addXp(member, amount) {
           accent_color: 0x1e4d70,
           components: [
             { type: 10, content: '## 🎉 Nouveau niveau atteint !' },
-            { type: 10, content: `${member} vient de passer au **niveau ${newLevel}** !\nContinue comme ça pour gravir les échelons de Nancy RP V.2.` },
+            { type: 10, content: `${member} vient de passer au **niveau ${newLevel}** !\n\nTa régularité, que ce soit par ton activité écrite ou vocale, te fait progresser parmi les citoyens les plus investis de Nancy RP V.2. Continue ainsi pour atteindre le niveau maximal et débloquer les prochaines récompenses.` },
             { type: 12, items: [{ media: { url: 'attachment://A.gif' } }] },
             { type: 10, content: `-# Nancy RP V.2 • Niveau ${newLevel} / ${maxLevel}` }
           ]
@@ -101,9 +114,9 @@ async function addXp(member, amount) {
 }
 async function creditVoice(member, now = Date.now()) {
   const key = `${member.guild.id}:${member.id}`; const session = voiceSessions.get(key); if (!session) return;
-  const minutes = Math.floor((now - session.creditedAt) / 60_000); if (minutes < 1) return;
-  session.creditedAt += minutes * 60_000;
-  await addXp(member, minutes * 5);
+  const periods = Math.floor((now - session.creditedAt) / 15_000); if (periods < 1) return;
+  session.creditedAt += periods * 15_000;
+  await addXp(member, periods * 4);
 }
 function ticketPanel() {
   return {
@@ -164,23 +177,36 @@ async function execute(ctx, command, args, slash = false) {
   if (!has(member, command)) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
-  if (command === 'ping') return reply(ctx, `Pong ! Latence : **${client.ws.ping} ms**.`);
-  if (command === 'help') return reply(ctx, helpText, true);
+  if (command === 'ping') return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## 🛰️ Nancy RP V.2 • État du bot' }, { type: 10, content: `Le bot est connecté et opérationnel. Latence actuelle : **${client.ws.ping} ms**.` }, { type: 10, content: '-# Les systèmes de modération, tickets et progression sont prêts.' }] }], true);
+  if (command === 'help') return v2Reply(ctx, helpComponents(), true);
   if (command === 'rank') {
     const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member);
     if (!target) return reply(ctx, 'Membre introuvable.', true);
     const xp = config(guild.id).levels.users[target.id]?.xp ?? 0;
-    const level = levelFromXp(xp); const next = level >= maxLevel ? null : xpForLevel(level + 1);
-    return reply(ctx, `🏅 **${target.user.tag}** — niveau **${level}/${maxLevel}**, **${xp} XP**${next ? ` (${next - xp} XP avant le niveau ${level + 1})` : ' — niveau maximum !'}`);
+    const level = levelFromXp(xp); const currentFloor = xpForLevel(level); const next = level >= maxLevel ? null : xpForLevel(level + 1);
+    const ratio = next ? (xp - currentFloor) / (next - currentFloor) : 1;
+    return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [
+      { type: 10, content: `## 🏅 Profil de progression • ${target.user.tag}` },
+      { type: 10, content: `${target}\n\n### Niveau ${level} / ${maxLevel}\n\`${progressBar(ratio)}\` **${Math.floor(ratio * 100)} %**` },
+      { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: next ? `**${xp.toLocaleString('fr-FR')} XP** accumulée • encore **${(next - xp).toLocaleString('fr-FR')} XP** avant le niveau **${level + 1}**.\n\n-# Activité message et présence en vocal contribuent toutes deux à ta progression.` : `**${xp.toLocaleString('fr-FR')} XP** accumulée • tu as atteint le **niveau maximum**.\n\n-# Félicitations : ton parcours est complété.` }
+    ] }], true);
   }
   if (command === 'leaderboard') {
     const users = Object.entries(config(guild.id).levels.users).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
-    if (!users.length) return reply(ctx, 'Aucune expérience n’a encore été gagnée.', true);
+    if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## 🏆 Classement Nancy RP V.2' }, { type: 10, content: 'Aucune expérience n’a encore été gagnée. Lance la progression en participant au serveur !' }] }], true);
     const lines = await Promise.all(users.map(async ([id, data], index) => {
       const ranked = await guild.members.fetch(id).catch(() => null);
-      return `**${index + 1}.** ${ranked?.user.tag ?? `Utilisateur ${id}`} — niveau ${levelFromXp(data.xp)} · ${data.xp} XP`;
+      const medal = ['🥇', '🥈', '🥉'][index] ?? `**${index + 1}.**`;
+      return `${medal} **${ranked?.user.tag ?? `Utilisateur ${id}`}**\n> Niveau **${levelFromXp(data.xp)}** • **${data.xp.toLocaleString('fr-FR')} XP**`;
     }));
-    return reply(ctx, `🏆 **Classement Nancy RP V.2**\n${lines.join('\n')}`);
+    return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [
+      { type: 10, content: '## 🏆 Classement officiel • Nancy RP V.2' },
+      { type: 10, content: 'Voici les citoyens les plus actifs. Ce classement est calculé à partir des données XP au moment exact de la commande.' },
+      { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: lines.join('\n\n') },
+      { type: 10, content: '-# Continue à écrire et à participer en vocal pour progresser dans le classement.' }
+    ] }], true);
   }
   if (command === 'levelroles') {
     const roles = config(guild.id).levels.roles;
@@ -295,9 +321,9 @@ client.on(Events.MessageCreate, async m => {
   if (m.author.bot || !m.guild) return;
   if (!m.content.startsWith(prefix) && m.content.trim().length >= 3) {
     const user = config(m.guild.id).levels.users[m.author.id] ??= { xp: 0, lastMessageAt: 0 };
-    if (Date.now() - user.lastMessageAt >= 45_000) {
+    if (Date.now() - user.lastMessageAt >= 20_000) {
       user.lastMessageAt = Date.now();
-      const gained = Math.min(15, 4 + Math.floor(m.content.trim().length / 50));
+      const gained = Math.min(25, 8 + Math.floor(m.content.trim().length / 25));
       await addXp(m.member, gained);
     }
   }
@@ -316,7 +342,7 @@ setInterval(async () => {
     const [guildId, memberId] = key.split(':'); const guild = client.guilds.cache.get(guildId); const member = guild && await guild.members.fetch(memberId).catch(() => null);
     if (member?.voice.channelId) await creditVoice(member); else voiceSessions.delete(key);
   }
-}, 60_000);
+}, 15_000);
 client.on(Events.GuildMemberAdd, async member => { if (!member.user.bot || !config(member.guild.id).antibot) return; await member.ban({ reason: 'Antibot activé' }).catch(() => {}); await log(member.guild, `**ANTIBOT** — ${member.user.tag} banni automatiquement.`); });
 
 const actions = new Map();
