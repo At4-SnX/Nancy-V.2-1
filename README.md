@@ -58,6 +58,10 @@ Seul le compte dont l’identifiant est défini dans la variable Railway `BOT_OW
 
 L’antispam est actif par défaut : **6 messages en 7 secondes** entraînent la suppression du message déclencheur et un timeout de **10 minutes**. Configurez-le avec `/antispam`, par exemple `/antispam etat:on messages:5 secondes:10 timeout:15m`. Les administrateurs ne sont pas sanctionnés par l’antispam. Comme pour les autres protections, seul `BOT_OWNER_ID` peut l’éteindre.
 
+### Anti-lien
+
+L’anti-lien est toujours actif : les messages contenant une URL commençant par `https://` ou une invitation `discord.gg/` sont supprimés. Les liens qui contiennent `tenor` restent autorisés pour les GIFs.
+
 ## Système de niveaux
 
 - Un message d’au moins 3 caractères rapporte **8 à 25 XP** selon sa longueur. Un délai de 20 secondes par membre évite le spam XP.

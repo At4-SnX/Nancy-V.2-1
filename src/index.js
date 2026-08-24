@@ -140,6 +140,20 @@ async function enforceAntiSpam(message) {
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
 }
+async function enforceAntiLink(message) {
+  const links = message.content.match(/https:\/\/\S+|discord\.gg\/\S+/gi) ?? [];
+  const forbidden = links.some(link => !link.toLowerCase().includes('tenor'));
+  if (!forbidden) return false;
+  await message.delete().catch(() => {});
+  await log(message.guild, `**ANTILIEN** — Message de ${message.author.tag} supprimé : lien non autorisé.`);
+  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: 0xc0392b, components: [
+    { type: 10, content: '## 🔗 Lien non autorisé' },
+    { type: 10, content: `${message.author}, les liens **https://** et les invitations **discord.gg/** ne sont pas autorisés sur Nancy RP V.2. Seuls les liens contenant **Tenor** sont acceptés.` },
+    { type: 10, content: '-# Ton message a été supprimé automatiquement par la protection anti-lien.' }
+  ] }] }).catch(() => null);
+  if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
+  return true;
+}
 function ticketPanel() {
   return {
     flags: 32_768,
@@ -351,6 +365,7 @@ client.on(Events.InteractionCreate, async i => {
 });
 client.on(Events.MessageCreate, async m => {
   if (m.author.bot || !m.guild) return;
+  if (await enforceAntiLink(m)) return;
   if (await enforceAntiSpam(m)) return;
   if (!m.content.startsWith(prefix) && m.content.trim().length >= 3) {
     const user = config(m.guild.id).levels.users[m.author.id] ??= { xp: 0, lastMessageAt: 0 };
