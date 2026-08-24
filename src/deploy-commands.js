@@ -1,0 +1,31 @@
+import 'dotenv/config';
+import { ChannelType, REST, Routes, SlashCommandBuilder } from 'discord.js';
+
+const commands = [
+  new SlashCommandBuilder().setName('ping').setDescription('Voir la latence du bot'),
+  new SlashCommandBuilder().setName('kick').setDescription('Expulser un membre').addUserOption(o => o.setName('membre').setDescription('Membre à expulser').setRequired(true)).addStringOption(o => o.setName('raison').setDescription('Raison')),
+  new SlashCommandBuilder().setName('ban').setDescription('Bannir un membre').addUserOption(o => o.setName('membre').setDescription('Membre à bannir').setRequired(true)).addStringOption(o => o.setName('raison').setDescription('Raison')),
+  new SlashCommandBuilder().setName('mute').setDescription('Timeout un membre').addUserOption(o => o.setName('membre').setDescription('Membre à timeout').setRequired(true)).addStringOption(o => o.setName('duree').setDescription('Ex. 10m, 2h, 1d').setRequired(true)).addStringOption(o => o.setName('raison').setDescription('Raison')),
+  new SlashCommandBuilder().setName('unmute').setDescription('Retirer le timeout').addUserOption(o => o.setName('membre').setDescription('Membre à rétablir').setRequired(true)),
+  new SlashCommandBuilder().setName('clear').setDescription('Supprimer des messages').addIntegerOption(o => o.setName('quantite').setDescription('1 à 100').setMinValue(1).setMaxValue(100).setRequired(true)),
+  new SlashCommandBuilder().setName('lock').setDescription('Fermer ce salon'),
+  new SlashCommandBuilder().setName('unlock').setDescription('Ouvrir ce salon'),
+  new SlashCommandBuilder().setName('slowmode').setDescription('Régler le mode lent').addIntegerOption(o => o.setName('secondes').setDescription('0 à 21600').setMinValue(0).setMaxValue(21600).setRequired(true)),
+  new SlashCommandBuilder().setName('antibot').setDescription('Activer ou désactiver l’antibot').addStringOption(o => o.setName('etat').setDescription('on ou off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })),
+  new SlashCommandBuilder().setName('antinuke').setDescription('Configurer l’antinuke').addStringOption(o => o.setName('etat').setDescription('on ou off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })).addIntegerOption(o => o.setName('seuil').setDescription('Actions en 10 secondes (défaut : 3)').setMinValue(2).setMaxValue(20)).addStringOption(o => o.setName('action').setDescription('Action (défaut : strip)').addChoices({ name: 'strip', value: 'strip' }, { name: 'kick', value: 'kick' }, { name: 'ban', value: 'ban' })),
+  new SlashCommandBuilder().setName('rank').setDescription('Voir le niveau d’un membre').addUserOption(o => o.setName('membre').setDescription('Membre à consulter')),
+  new SlashCommandBuilder().setName('leaderboard').setDescription('Voir le classement des niveaux'),
+  new SlashCommandBuilder().setName('levelrole').setDescription('Définir le rôle d’un palier de niveau').addIntegerOption(o => o.setName('niveau').setDescription('1, 10, 20, 30, 40, 50, 60 ou 70').setRequired(true).addChoices({ name: 'Niveau 1', value: 1 }, { name: 'Niveau 10', value: 10 }, { name: 'Niveau 20', value: 20 }, { name: 'Niveau 30', value: 30 }, { name: 'Niveau 40', value: 40 }, { name: 'Niveau 50', value: 50 }, { name: 'Niveau 60', value: 60 }, { name: 'Niveau 70', value: 70 })).addRoleOption(o => o.setName('role').setDescription('Rôle à attribuer').setRequired(true)),
+  new SlashCommandBuilder().setName('levelroles').setDescription('Voir les rôles de niveau configurés'),
+  new SlashCommandBuilder().setName('levelchannel').setDescription('Définir le salon des annonces de niveau').addChannelOption(o => o.setName('salon').setDescription('Salon des annonces').addChannelTypes(ChannelType.GuildText).setRequired(true)),
+  new SlashCommandBuilder().setName('ticketrole').setDescription('Définir le rôle alerté pour un type de ticket').addStringOption(o => o.setName('type').setDescription('Type de ticket').setRequired(true).addChoices({ name: 'Ticket Fondation', value: 'fondation' }, { name: 'Ticket Légal', value: 'legal' }, { name: 'Ticket Illégal', value: 'illegal' }, { name: 'Ticket report Staff', value: 'report_staff' }, { name: 'Ticket Report Joueur', value: 'report_joueur' }, { name: 'Ticket Question', value: 'question' }, { name: 'Ticket Unban', value: 'unban' }, { name: 'Ticket Build', value: 'build' })).addRoleOption(o => o.setName('role').setDescription('Rôle à alerter').setRequired(true)),
+  new SlashCommandBuilder().setName('ticketcategory').setDescription('Définir la catégorie des tickets').addChannelOption(o => o.setName('categorie').setDescription('Catégorie Discord').addChannelTypes(ChannelType.GuildCategory).setRequired(true)),
+  new SlashCommandBuilder().setName('ticketpanel').setDescription('Publier le panneau de création de tickets'),
+  new SlashCommandBuilder().setName('ticketclose').setDescription('Fermer le ticket actuel'),
+  new SlashCommandBuilder().setName('help').setDescription('Voir les commandes de modération')
+].map(c => c.toJSON());
+
+if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID || !process.env.GUILD_ID) throw new Error('DISCORD_TOKEN, CLIENT_ID et GUILD_ID sont requis dans .env');
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
+console.log(`${commands.length} commandes déployées.`);
