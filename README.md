@@ -60,7 +60,7 @@ L’antispam est actif par défaut : **6 messages en 7 secondes** entraînent la
 
 ### Anti-lien
 
-L’anti-lien est toujours actif : les messages contenant une URL commençant par `https://` ou une invitation `discord.gg/` sont supprimés. Les liens qui contiennent `tenor` restent autorisés pour les GIFs.
+L’anti-lien est toujours actif : les messages contenant une invitation `discord.gg/` sont supprimés. Les autres liens, dont `https://`, restent autorisés. Une invitation contenant `tenor` reste autorisée.
 
 ## Système de niveaux
 
