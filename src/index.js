@@ -43,6 +43,7 @@ function targetId(value) { return value?.replace(/[<#@!>&]/g, ''); }
 function roleName(value) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function isStaffMember(member) { return member.roles.cache.some(role => roleName(role.name) === 'equipe staff'); }
 function has(member, command) {
+  if (member.id === member.guild.ownerId) return true;
   const names = member.roles.cache.map(role => roleName(role.name));
   if (names.includes('administrateur')) return true;
   return isStaffMember(member) && staffCommands.has(command);
