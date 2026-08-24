@@ -57,6 +57,10 @@ function ticketConfig(guildId) {
   tickets.roles ??= {}; tickets.open ??= {}; tickets.categoryId ??= null;
   return tickets;
 }
+function lockConfig(guildId) {
+  const locks = config(guildId).locks ??= {};
+  return locks;
+}
 function ticketCategoryId(tickets, type) {
   return process.env[ticketCategoryVariables[type]]?.trim() || process.env.TICKET_CATEGORY_ID?.trim() || tickets.categoryId;
 }
@@ -312,7 +316,34 @@ async function execute(ctx, command, args, slash = false) {
   }
   if (command === 'unmute') { const target = await getMember(slash ? ctx.options.getUser('membre').id : args[0]); if (!target?.moderatable) return reply(ctx, 'Membre introuvable ou non modérable.', true); await target.timeout(null); return reply(ctx, `${target.user.tag} n’est plus mute.`); }
   if (command === 'clear') { const amount = Number(slash ? ctx.options.getInteger('quantite') : args[0] || 0); if (!Number.isInteger(amount) || amount < 1 || amount > 100 || !ctx.channel?.bulkDelete) return reply(ctx, 'Indiquez une quantité entre 1 et 100 dans un salon textuel.', true); const deleted = await ctx.channel.bulkDelete(amount, true); return reply(ctx, `${deleted.size} message(s) supprimé(s).`); }
-  if (command === 'lock' || command === 'unlock') { if (!ctx.channel?.permissionOverwrites) return reply(ctx, 'Salon non compatible.', true); await ctx.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: command === 'lock' ? false : null }, { reason: `${command} par ${actor.tag}` }); return reply(ctx, command === 'lock' ? '🔒 Salon verrouillé.' : '🔓 Salon déverrouillé.'); }
+  if (command === 'lock' || command === 'unlock') {
+    if (!ctx.channel?.permissionOverwrites) return reply(ctx, 'Salon non compatible.', true);
+    const botMember = guild.members.me;
+    if (!botMember?.permissionsIn(ctx.channel).has(PermissionFlagsBits.ManageChannels)) return reply(ctx, 'Il me manque la permission **Gérer les salons** dans ce salon.', true);
+    const locks = lockConfig(guild.id); const channelId = ctx.channel.id;
+    const lockPermissions = ['SendMessages', 'AddReactions', 'CreatePublicThreads', 'CreatePrivateThreads', 'SendMessagesInThreads'];
+    if (command === 'lock') {
+      if (locks[channelId]) return reply(ctx, 'Ce salon est déjà verrouillé.', true);
+      const overwriteIds = new Set([...ctx.channel.permissionOverwrites.cache.keys(), guild.roles.everyone.id]);
+      const snapshot = {};
+      for (const id of overwriteIds) {
+        if (id === client.user.id) continue;
+        const overwrite = ctx.channel.permissionOverwrites.cache.get(id);
+        snapshot[id] = { created: !overwrite, permissions: Object.fromEntries(lockPermissions.map(permission => [permission, overwrite?.allow.has(PermissionFlagsBits[permission]) ? true : overwrite?.deny.has(PermissionFlagsBits[permission]) ? false : null])) };
+        await ctx.channel.permissionOverwrites.edit(id, Object.fromEntries(lockPermissions.map(permission => [permission, false])), { reason: `Verrouillage par ${actor.tag}` });
+      }
+      locks[channelId] = snapshot; save();
+      return reply(ctx, '🔒 Salon verrouillé. Les permissions précédentes seront restaurées par `unlock`.');
+    }
+    const snapshot = locks[channelId];
+    if (!snapshot) return reply(ctx, 'Ce salon n’a pas été verrouillé par le bot ou son état n’est plus disponible.', true);
+    for (const [id, saved] of Object.entries(snapshot)) {
+      if (saved.created) await ctx.channel.permissionOverwrites.delete(id, `Déverrouillage par ${actor.tag}`).catch(() => {});
+      else await ctx.channel.permissionOverwrites.edit(id, saved.permissions, { reason: `Déverrouillage par ${actor.tag}` }).catch(() => {});
+    }
+    delete locks[channelId]; save();
+    return reply(ctx, '🔓 Salon déverrouillé et permissions restaurées.');
+  }
   if (command === 'slowmode') { const seconds = Number(slash ? ctx.options.getInteger('secondes') : args[0]); if (!Number.isInteger(seconds) || seconds < 0 || seconds > 21600 || !ctx.channel?.setRateLimitPerUser) return reply(ctx, 'Indiquez entre 0 et 21600 secondes.', true); await ctx.channel.setRateLimitPerUser(seconds); return reply(ctx, `Mode lent réglé sur ${seconds} seconde(s).`); }
   if (command === 'antibot') { const state = (slash ? ctx.options.getString('etat') : args[0])?.toLowerCase(); if (!['on', 'off'].includes(state)) return reply(ctx, 'Usage : antibot on/off', true); if (state === 'off' && actor.id !== process.env.BOT_OWNER_ID) return reply(ctx, 'Seul le propriétaire défini dans `BOT_OWNER_ID` peut désactiver l’antibot.', true); config(guild.id).antibot = state === 'on'; save(); return reply(ctx, `Antibot **${state === 'on' ? 'activé' : 'désactivé'}**.`); }
   if (command === 'antinuke') { const state = (slash ? ctx.options.getString('etat') : args[0])?.toLowerCase(); const threshold = slash ? ctx.options.getInteger('seuil') : Number(args[1] || 3); const action = (slash ? ctx.options.getString('action') : args[2] || 'strip').toLowerCase(); if (!['on', 'off'].includes(state) || !Number.isInteger(threshold) || threshold < 2 || threshold > 20 || !['strip', 'kick', 'ban'].includes(action)) return reply(ctx, 'Usage : antinuke on/off [seuil 2-20] [strip|kick|ban]', true); if (state === 'off' && actor.id !== process.env.BOT_OWNER_ID) return reply(ctx, 'Seul le propriétaire défini dans `BOT_OWNER_ID` peut désactiver l’antinuke.', true); config(guild.id).antinuke = { enabled: state === 'on', threshold, action }; save(); return reply(ctx, `Antinuke **${state === 'on' ? 'activé' : 'désactivé'}** (seuil ${threshold}, action ${action}).`); }
