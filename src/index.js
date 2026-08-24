@@ -194,12 +194,16 @@ async function createTicket(guild, owner, type, reportedStaff = []) {
   const channel = await guild.channels.create({ name: `ticket-${type.replace('_', '-')}-${safeName}`, type: ChannelType.GuildText, parent: categoryId, permissionOverwrites: overwrites, reason: `${ticketTypes[type]} créé par ${owner.user.tag}` });
   tickets.open[channel.id] = { ownerId: owner.id, type, reportedStaff, createdAt: Date.now() }; save();
   const alertRole = await guild.roles.fetch(alertRoleId).catch(() => null);
+  await channel.send({
+    content: `<@&${alertRoleId}> • Nouveau dossier **${ticketTypes[type]}** à prendre en charge.`,
+    allowedMentions: { parse: [], roles: [alertRoleId], users: [] }
+  }).catch(() => {});
   const reportedText = reportedStaff.length ? `\n\n**Membre(s) du staff signalé(s) :** ${reportedStaff.map(id => `<@${id}>`).join(', ')}` : '';
   await channel.send({
     flags: 32_768,
     components: [{ type: 17, accent_color: 0x1e4d70, components: [
       { type: 10, content: `## ${ticketTypes[type]}` },
-      { type: 10, content: `Bienvenue ${owner}. Votre dossier a été créé avec succès. Présentez votre demande de manière précise et structurée ; l’équipe **${alertRole?.name ?? 'concernée'}** sera informée sans recevoir de notification intrusive.${reportedText}` },
+      { type: 10, content: `Bienvenue ${owner}. Votre dossier a été créé avec succès. Présentez votre demande de manière précise et structurée ; l’équipe **${alertRole?.name ?? 'concernée'}** a été notifiée et prendra votre dossier en charge.${reportedText}` },
       { type: 14, divider: true, spacing: 1 },
       { type: 1, components: [{ type: 2, style: 4, custom_id: 'ticket:close', label: 'Fermer le ticket' }] }
     ] }]
@@ -271,7 +275,7 @@ async function execute(ctx, command, args, slash = false) {
     const role = await guild.roles.fetch(roleId).catch(() => null);
     if (!ticketTypes[type] || !role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Choisissez un rôle dédié valide ; le rôle @everyone ne peut pas être utilisé pour les tickets.', true);
     ticketConfig(guild.id).roles[type] = role.id; save();
-    return reply(ctx, `Le rôle ${role} disposera de l’accès aux dossiers de type **${ticketTypes[type]}**. Aucune notification automatique ne sera envoyée.`);
+    return reply(ctx, `Le rôle ${role} disposera de l’accès et recevra une notification pour les dossiers de type **${ticketTypes[type]}**.`);
   }
   if (command === 'ticketcategory') {
     const categoryId = slash ? ctx.options.getChannel('categorie')?.id : targetId(args[0]);

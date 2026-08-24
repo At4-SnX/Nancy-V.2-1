@@ -79,7 +79,7 @@ Les contrôles reposent sur les noms de rôle exacts **Administrateur** et **Éq
 
 ## Système de tickets
 
-Le panneau Components V2 propose : Ticket Fondation, Ticket Légal, Ticket Illégal, Ticket report Staff, Ticket Report Joueur, Ticket Question, Ticket Unban et Ticket Build. Chaque type possède son propre rôle d’accès, qui peut consulter et répondre dans le salon privé. Le bot n’envoie aucune mention ni notification automatique.
+Le panneau Components V2 propose : Ticket Fondation, Ticket Légal, Ticket Illégal, Ticket report Staff, Ticket Report Joueur, Ticket Question, Ticket Unban et Ticket Build. Chaque type possède son propre rôle d’accès, qui peut consulter et répondre dans le salon privé. À l’ouverture d’un ticket, seul ce rôle dédié est pingé ; le bot ne mentionne jamais `@everyone` ni les membres.
 
 Configuration administrateur :
 
