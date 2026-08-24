@@ -53,8 +53,8 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 
 ## Système de niveaux
 
-- Un message d’au moins 3 caractères rapporte **4 à 15 XP** selon sa longueur. Un délai de 45 secondes par membre évite le spam XP.
-- Le vocal rapporte **5 XP par minute** passée dans un salon vocal.
+- Un message d’au moins 3 caractères rapporte **8 à 25 XP** selon sa longueur. Un délai de 20 secondes par membre évite le spam XP.
+- Le vocal rapporte **4 XP toutes les 15 secondes** passées dans un salon vocal (16 XP/minute). Le crédit est actualisé toutes les 15 secondes.
 - Le niveau est calculé sur l’XP totale et est plafonné au niveau **70**.
 - Les paliers de rôle sont : **1, 10, 20, 30, 40, 50, 60 et 70**.
 
