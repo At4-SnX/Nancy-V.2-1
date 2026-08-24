@@ -15,7 +15,7 @@ Bot Discord de modération complet, avec commandes `/` et préfixe `&`.
 
 1. Créez un dépôt GitHub avec ces fichiers, sans le fichier `.env`, puis poussez-le sur GitHub.
 2. Sur Railway, créez un projet puis **Deploy from GitHub Repo** et choisissez ce dépôt.
-3. Dans **Variables**, ajoutez `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `PREFIX` (valeur `&`), et si souhaité `LOG_CHANNEL_ID`. Ajoutez aussi `TICKET_CATEGORY_ID` ou les variables de catégorie détaillées dans `.env.example`.
+3. Dans **Variables**, ajoutez `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `PREFIX` (valeur `&`), `BOT_OWNER_ID` (votre identifiant Discord), et si souhaité `LOG_CHANNEL_ID`. Ajoutez aussi `TICKET_CATEGORY_ID` ou les variables de catégorie détaillées dans `.env.example`.
 4. Ajoutez un **Volume** Railway monté sur `/app/data`. Il conserve les réglages `antibot` et `antinuke` entre les redéploiements.
 5. Railway installe les dépendances, enregistre les commandes slash, puis lance automatiquement le bot grâce à `railway.json`. Aucun domaine public n’est nécessaire : c’est un service bot permanent.
 
@@ -50,6 +50,8 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 | `/help` | `&help` | Aide |
 
 `antinuke` surveille les créations, suppressions et modifications de salons/rôles, ainsi que les bans et kicks. Dès que le seuil d'un même auteur est atteint dans une fenêtre de 10 secondes, il applique l'action choisie. `strip` retire les rôles dangereux ; `kick` ou `ban` agit directement contre l'auteur.
+
+Seul le compte dont l’identifiant est défini dans la variable Railway `BOT_OWNER_ID` peut exécuter `antibot off` ou `antinuke off`, même si d’autres personnes possèdent le rôle Administrateur.
 
 ## Système de niveaux
 
