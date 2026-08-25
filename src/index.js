@@ -246,8 +246,8 @@ async function execute(ctx, command, args, slash = false) {
     const xp = config(guild.id).levels.users[target.id]?.xp ?? 0;
     const level = levelFromXp(xp); const currentFloor = xpForLevel(level); const next = level >= maxLevel ? null : xpForLevel(level + 1);
     const ratio = next ? (xp - currentFloor) / (next - currentFloor) : 1;
-    return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [
-      { type: 10, content: `## 🏅 Profil de progression • ${target.user.tag}` },
+    return v2Reply(ctx, [{ type: 17, accent_color: 0xFFFFFF, components: [
+      { type: 10, content: `## <:Nancy26Photoroom:1541568067836973096> Niveau • ${target.user.tag}` },
       { type: 10, content: `${target}\n\n### Niveau ${level} / ${maxLevel}\n\`${progressBar(ratio)}\` **${Math.floor(ratio * 100)} %**` },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: next ? `**${xp.toLocaleString('fr-FR')} XP** accumulée • encore **${(next - xp).toLocaleString('fr-FR')} XP** avant le niveau **${level + 1}**.\n\n-# Activité message et présence en vocal contribuent toutes deux à ta progression.` : `**${xp.toLocaleString('fr-FR')} XP** accumulée • tu as atteint le **niveau maximum**.\n\n-# Félicitations : ton parcours est complété.` }
@@ -255,15 +255,15 @@ async function execute(ctx, command, args, slash = false) {
   }
   if (command === 'leaderboard') {
     const users = Object.entries(config(guild.id).levels.users).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
-    if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## 🏆 Classement Nancy RP V.2' }, { type: 10, content: 'Aucune expérience n’a encore été gagnée. Lance la progression en participant au serveur !' }] }], true);
+    if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Classement Nancy RP V.2' }, { type: 10, content: 'Aucune expérience n’a encore été gagnée. Lance la progression en participant au serveur !' }] }], true);
     const lines = await Promise.all(users.map(async ([id, data], index) => {
       const ranked = await guild.members.fetch(id).catch(() => null);
       const medal = ['🥇', '🥈', '🥉'][index] ?? `**${index + 1}.**`;
       return `${medal} **${ranked?.user.tag ?? `Utilisateur ${id}`}**\n> Niveau **${levelFromXp(data.xp)}** • **${data.xp.toLocaleString('fr-FR')} XP**`;
     }));
-    return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [
-      { type: 10, content: '## 🏆 Classement officiel • Nancy RP V.2' },
-      { type: 10, content: 'Voici les citoyens les plus actifs. Ce classement est calculé à partir des données XP au moment exact de la commande.' },
+    return v2Reply(ctx, [{ type: 17, accent_color: 0xFFFFFF, components: [
+      { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Classement officiel • Nancy RP V.2' },
+      { type: 10, content: '<:Nancy23Photoroom:1541568232756879370> Voici les **__citoyens les plus actifs__**. Ce classement est calculé à partir des **__données XP__** au moment de la commande.' },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: lines.join('\n\n') },
       { type: 10, content: '-# Continue à écrire et à participer en vocal pour progresser dans le classement.' }
