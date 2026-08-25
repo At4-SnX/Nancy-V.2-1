@@ -47,6 +47,9 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 | `/buy rôle` | `&buy <rôle>` | Acheter un rôle avec son argent |
 | `/shoprole rôle prix` | `&shoprole <rôle> <prix>` | Ajouter ou mettre à jour un rôle de boutique (admin) |
 | `/statistique` | `&stats` | Voir les graphiques d’activité du serveur |
+| `/giveawaymanager rôle` | `&giveawaymanager <rôle>` | Définir le rôle Gérant giveaways (admin) |
+| `/giveaway prix durée gagnants image` | `&giveaway <durée> <gagnants> <prix>` | Créer un giveaway |
+| `/reroll id` | `&reroll <id>` | Tirer de nouveaux gagnants après la fin |
 | `/levelrole niveau rôle` | `&levelrole <niveau> <rôle>` | Configurer un rôle de récompense (admin) |
 | `/levelroles` | `&levelroles` | Voir les huit rôles de niveau |
 | `/ticketrole type rôle` | `&ticketrole <type> <rôle>` | Définir le rôle ayant accès par type de ticket (admin) |
@@ -81,6 +84,12 @@ Configurez les huit rôles avec `/levelrole` (ou `&levelrole`) : par exemple `/l
 Chaque message validé rapporte entre **1 et 10 €**, selon sa longueur. Le vocal rapporte **1 € toutes les 15 secondes**. Les rôles de boutique sont ajoutés par un administrateur avec `/shoprole role:@Rôle prix:500`. Les membres utilisent ensuite `/shop`, `/coins` et `/buy` pour consulter et acheter les rôles.
 
 Les XP, niveaux et soldes sont stockés dans `data/levels.sqlite`. Montez impérativement le volume Railway sur `/app/data` afin de les conserver entre les redéploiements.
+
+## Giveaways
+
+Définissez d’abord le rôle autorisé avec `/giveawaymanager role:@Gérant giveaways`. Les administrateurs et les membres possédant ce rôle peuvent lancer un giveaway : `/giveaway prix:Un véhicule durée:2h gagnants:1`. Une image ou un GIF facultatif peut être fourni par URL ; sans URL, le GIF officiel du giveaway est utilisé.
+
+Les joueurs peuvent participer, consulter la liste des participants ou retirer leur participation directement avec les boutons du giveaway. À échéance, les gagnants sont sélectionnés aléatoirement. Seul l’organisateur ou un administrateur peut effectuer un reroll après la fin. Les giveaways et leurs participations sont enregistrés dans SQLite et sont restaurés après un redémarrage.
 
 Configurez aussi le salon réservé aux annonces avec `/levelchannel salon:#niveaux`. Lors d’un passage de niveau, le bot y publie un message **Discord Components V2** Nancy RP V.2, avec le GIF `A.gif` sous le texte.
 

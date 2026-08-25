@@ -3,6 +3,7 @@ import { AttachmentBuilder, AuditLogEvent, ChannelType, Client, EmbedBuilder, Ev
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { randomInt } from 'node:crypto';
 
 const prefix = process.env.PREFIX || '&';
 const UI = {
@@ -36,6 +37,24 @@ levelsDb.exec(`
     metric_name TEXT NOT NULL,
     metric_value INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (guild_id, metric_date, metric_name)
+  )
+  ;CREATE TABLE IF NOT EXISTS giveaways (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT,
+    organizer_id TEXT NOT NULL,
+    prize TEXT NOT NULL,
+    winner_count INTEGER NOT NULL,
+    ends_at INTEGER NOT NULL,
+    image_url TEXT,
+    ended INTEGER NOT NULL DEFAULT 0,
+    winners_json TEXT
+  )
+  ;CREATE TABLE IF NOT EXISTS giveaway_participants (
+    giveaway_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    PRIMARY KEY (giveaway_id, user_id)
   )
 `);
 const levelColumns = levelsDb.prepare('PRAGMA table_info(member_levels)').all().map(column => column.name);
@@ -109,6 +128,11 @@ const ticketCategoryVariables = {
   fondation: 'TICKET_CATEGORY_FONDATION_ID', legal: 'TICKET_CATEGORY_LEGAL_ID', illegal: 'TICKET_CATEGORY_ILLEGAL_ID', report_staff: 'TICKET_CATEGORY_REPORT_STAFF_ID',
   report_joueur: 'TICKET_CATEGORY_REPORT_JOUEUR_ID', question: 'TICKET_CATEGORY_QUESTION_ID', unban: 'TICKET_CATEGORY_UNBAN_ID', build: 'TICKET_CATEGORY_BUILD_ID'
 };
+const giveawayEmoji = {
+  reroll: { id: '1541827161319538770', name: 'Nancy50removebg' },
+  join: { id: '1541827160094810254', name: 'Nancy52removebg' },
+  leave: { id: '1541827158685655040', name: 'Nancy51removebg' }
+};
 
 function duration(input) {
   const match = /^(\d+)\s*([mhd])$/i.exec(input || '');
@@ -136,15 +160,23 @@ function lockConfig(guildId) {
   const locks = config(guildId).locks ??= {};
   return locks;
 }
+function giveawayConfig(guildId) {
+  const giveaways = config(guildId).giveaways ??= { managerRoleId: null };
+  giveaways.managerRoleId ??= null;
+  return giveaways;
+}
+function canManageGiveaways(member) {
+  return has(member, 'giveawaymanager') || (giveawayConfig(member.guild.id).managerRoleId && member.roles.cache.has(giveawayConfig(member.guild.id).managerRoleId));
+}
 function ticketCategoryId(tickets, type) {
   return process.env[ticketCategoryVariables[type]]?.trim() || process.env.TICKET_CATEGORY_ID?.trim() || tickets.categoryId;
 }
 async function log(guild, text) { const channel = process.env.LOG_CHANNEL_ID && guild.channels.cache.get(process.env.LOG_CHANNEL_ID); if (channel?.isTextBased()) await channel.send({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(text).setTimestamp()] }).catch(() => {}); }
 function compact(text) { return `\`${String(text).replace(/`/g, '´').replace(/\s+/g, ' ').trim()}\``; }
 async function reply(ctx, text, ephemeral = false) { const content = compact(text); return ctx.reply({ content, ephemeral }).catch(() => ctx.channel?.send({ content })); }
-async function v2Reply(ctx, components, ephemeral = false) {
-  const payload = { flags: 32_768 | (ephemeral && ctx.isChatInputCommand?.() ? 64 : 0), components };
-  return ctx.reply(payload).catch(() => ctx.channel?.send({ flags: 32_768, components }));
+async function v2Reply(ctx, components, ephemeral = false, files = []) {
+  const payload = { flags: 32_768 | (ephemeral && ctx.isChatInputCommand?.() ? 64 : 0), components, files };
+  return ctx.reply(payload).catch(() => ctx.channel?.send({ flags: 32_768, components, files }));
 }
 function progressBar(value) { const filled = Math.max(0, Math.min(10, Math.round(value * 10))); return `${'▰'.repeat(filled)}${'▱'.repeat(10 - filled)}`; }
 function helpComponents() { return [{ type: 17, accent_color: UI.white, components: [
@@ -157,6 +189,8 @@ function helpComponents() { return [{ type: 17, accent_color: UI.white, componen
   { type: 10, content: `### ${UI.logo} Boutique & statistiques\n\`${prefix}coins\` consulte votre portefeuille. \`${prefix}shop\` présente les rôles disponibles et \`${prefix}buy <rôle>\` confirme un achat.\n\`${prefix}stats\` affiche les graphiques d’activité du serveur.` },
   { type: 10, content: `### <:Nancy38Photoroom:1541568051579850882> Tickets\n Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec \`${prefix}ticketclose\`.` },
   { type: 10, content: `### ${UI.notice} Accès aux fonctionnalités\n> Les réglages sensibles sont réservés aux administrateurs. L’équipe staff dispose des outils de modération courants. Les commandes de consultation restent accessibles à tous.` },
+  { type: 10, content: `### ${UI.bell} Giveaways\n> Les administrateurs et le rôle **Gérant giveaways** peuvent créer un tirage, suivre les participations et effectuer un reroll.` },
+  { type: 12, items: [{ media: { url: 'attachment://help.gif' } }] },
   { type: 10, content: '-# Nancy RP V.2 • Utilisez chaque outil avec discernement et conformément au règlement du serveur.' }
 ] }]; }
 
@@ -243,6 +277,66 @@ const ticketIntroduction = [
   '> <:Nancy49Photoroom:1541572044397748304> **__Ticket Build__** : `Pour toute demande concernant la construction, les bugs de mapping ou l’ajout/modification de structures.`'
 ].join('\n\n');
 
+function giveawayById(id) { return levelsDb.prepare('SELECT * FROM giveaways WHERE id = ?').get(id); }
+function giveawayParticipants(id) { return levelsDb.prepare('SELECT user_id FROM giveaway_participants WHERE giveaway_id = ?').all(id).map(row => row.user_id); }
+function giveawayPayload(giveaway, participantCount) {
+  const ended = Boolean(giveaway.ended); const winners = JSON.parse(giveaway.winners_json || '[]');
+  return { flags: 32_768, components: [{ type: 17, accent_color: UI.white, components: [
+    { type: 10, content: `## ${UI.logo} Giveaway • ${ended ? 'Terminé' : 'En cours'}` },
+    { type: 10, content: `${UI.arrow} **__Lot à remporter :__** ${giveaway.prize}\n\n> Organisé par <@${giveaway.organizer_id}>\n> ${ended ? `Résultat : ${winners.length ? winners.map(id => `<@${id}>`).join(', ') : 'aucun participant éligible'}` : `Fin du giveaway : <t:${Math.floor(giveaway.ends_at / 1000)}:R>`}\n> Nombre de gagnants : **${giveaway.winner_count}**` },
+    { type: 12, items: [{ media: { url: giveaway.image_url || 'attachment://giveaway.gif' } }] },
+    { type: 14, divider: true, spacing: 1 },
+    { type: 10, content: `${UI.bell} Participants enregistrés : **${participantCount}**` },
+    { type: 1, components: ended ? [
+      { type: 2, style: 2, custom_id: `giveaway:participants:${giveaway.id}`, label: 'Voir les participants' },
+      { type: 2, style: 2, custom_id: `giveaway:reroll:${giveaway.id}`, label: 'Reroll', emoji: giveawayEmoji.reroll }
+    ] : [
+      { type: 2, style: 3, custom_id: `giveaway:join:${giveaway.id}`, label: 'Participer', emoji: giveawayEmoji.join },
+      { type: 2, style: 2, custom_id: `giveaway:participants:${giveaway.id}`, label: 'Participants' },
+      { type: 2, style: 4, custom_id: `giveaway:leave:${giveaway.id}`, label: 'Retirer ma participation', emoji: giveawayEmoji.leave }
+    ] }
+  ] }] };
+}
+async function refreshGiveaway(giveaway) {
+  const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null); if (!channel?.isTextBased() || !giveaway.message_id) return;
+  const message = await channel.messages.fetch(giveaway.message_id).catch(() => null); if (message) await message.edit(giveawayPayload(giveaway, giveawayParticipants(giveaway.id).length)).catch(() => {});
+}
+function chooseWinners(participants, count, excluded = []) {
+  const pool = participants.filter(id => !excluded.includes(id)); const source = (pool.length >= count ? pool : participants).slice(); const winners = [];
+  while (source.length && winners.length < Math.min(count, participants.length)) winners.push(source.splice(randomInt(source.length), 1)[0]);
+  return winners;
+}
+async function endGiveaway(id) {
+  const giveaway = giveawayById(id); if (!giveaway || giveaway.ended || giveaway.ends_at > Date.now()) return;
+  const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count);
+  levelsDb.prepare('UPDATE giveaways SET ended = 1, winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id);
+  const updated = giveawayById(id); await refreshGiveaway(updated);
+  const channel = await client.channels.fetch(updated.channel_id).catch(() => null);
+  if (channel?.isTextBased()) await channel.send({ content: compact(`Giveaway terminé — ${winners.length ? `gagnant(s) : ${winners.map(winner => `<@${winner}>`).join(', ')}` : 'aucun participant.'}`), allowedMentions: { parse: [] } }).catch(() => {});
+}
+function scheduleGiveaway(id, endsAt) { const remaining = endsAt - Date.now(); if (remaining <= 0) return endGiveaway(id); setTimeout(() => scheduleGiveaway(id, endsAt), Math.min(remaining, 2_147_000_000)); }
+async function createGiveaway(guild, channel, organizer, prize, durationMs, winnerCount, imageUrl) {
+  const id = `${Date.now().toString(36)}${randomInt(1_000, 9_999)}`; const endsAt = Date.now() + durationMs;
+  levelsDb.prepare('INSERT INTO giveaways (id, guild_id, channel_id, organizer_id, prize, winner_count, ends_at, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, guild.id, channel.id, organizer.id, prize, winnerCount, endsAt, imageUrl || null);
+  const giveaway = giveawayById(id); const message = await channel.send({ ...giveawayPayload(giveaway, 0), files: imageUrl ? [] : [new AttachmentBuilder('assets/giveaway.gif', { name: 'giveaway.gif' })], allowedMentions: { parse: [] } });
+  levelsDb.prepare('UPDATE giveaways SET message_id = ?, image_url = ? WHERE id = ?').run(message.id, imageUrl || message.attachments.first()?.url || null, id);
+  const updated = giveawayById(id); scheduleGiveaway(id, endsAt); return updated;
+}
+async function respondGiveawayButton(interaction, action, id) {
+  const giveaway = giveawayById(id); if (!giveaway) return interaction.reply({ content: compact('Ce giveaway n’existe plus.'), ephemeral: true });
+  if (action === 'participants') { const ids = giveawayParticipants(id); return interaction.reply({ content: compact(ids.length ? `Participants (${ids.length}) : ${ids.map(userId => `<@${userId}>`).join(', ')}` : 'Aucun participant pour le moment.'), ephemeral: true, allowedMentions: { parse: [] } }); }
+  if (action === 'reroll') {
+    if (!giveaway.ended) return interaction.reply({ content: compact('Le reroll est disponible une fois le giveaway terminé.'), ephemeral: true });
+    if (interaction.user.id !== giveaway.organizer_id && !has(interaction.member, 'giveawaymanager')) return interaction.reply({ content: compact('Seul l’organisateur ou un administrateur peut effectuer un reroll.'), ephemeral: true });
+    const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
+    levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
+    return interaction.reply({ content: compact(`Reroll effectué — gagnant(s) : ${winners.length ? winners.map(winner => `<@${winner}>`).join(', ') : 'aucun participant.'}`), ephemeral: true, allowedMentions: { parse: [] } });
+  }
+  if (giveaway.ended) return interaction.reply({ content: compact('Ce giveaway est terminé.'), ephemeral: true });
+  if (action === 'join') levelsDb.prepare('INSERT OR IGNORE INTO giveaway_participants (giveaway_id, user_id) VALUES (?, ?)').run(id, interaction.user.id);
+  if (action === 'leave') levelsDb.prepare('DELETE FROM giveaway_participants WHERE giveaway_id = ? AND user_id = ?').run(id, interaction.user.id);
+  await refreshGiveaway(giveawayById(id)); return interaction.reply({ content: compact(action === 'join' ? 'Votre participation est confirmée.' : 'Votre participation a été retirée.'), ephemeral: true });
+}
 function ticketPanel() {
   return {
     flags: 32_768,
@@ -305,11 +399,35 @@ async function execute(ctx, command, args, slash = false) {
   const guild = ctx.guild; if (!guild) return reply(ctx, 'Cette commande doit être utilisée sur un serveur.', true);
   const member = ctx.member;
   const actor = ctx.user ?? ctx.author;
-  if (!has(member, command)) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
+  const giveawayException = (command === 'giveaway' && canManageGiveaways(member)) || command === 'reroll';
+  if (!has(member, command) && !giveawayException) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
+  if (command === 'giveawaymanager') {
+    const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]); const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Choisissez un rôle dédié valide pour gérer les giveaways.', true);
+    giveawayConfig(guild.id).managerRoleId = role.id; save(); return reply(ctx, `Le rôle ${role.name} peut désormais gérer les giveaways.`);
+  }
+  if (command === 'giveaway') {
+    if (!canManageGiveaways(member)) return reply(ctx, 'Seul un administrateur ou le rôle Gérant giveaways peut créer un giveaway.', true);
+    const prize = slash ? ctx.options.getString('prix') : args.slice(2).join(' ');
+    const durationValue = slash ? ctx.options.getString('duree') : args[0]; const winnerCount = Number(slash ? ctx.options.getInteger('gagnants') : args[1]);
+    const imageUrl = slash ? ctx.options.getString('image') : null; const durationMs = duration(durationValue);
+    if (!prize || !durationMs || !Number.isInteger(winnerCount) || winnerCount < 1 || winnerCount > 20 || (imageUrl && !/^https?:\/\/\S+$/i.test(imageUrl))) return reply(ctx, 'Usage : giveaway <durée> <gagnants> <lot> [image URL].', true);
+    const giveaway = await createGiveaway(guild, ctx.channel, actor, prize, durationMs, winnerCount, imageUrl);
+    return reply(ctx, `Giveaway créé : ${giveaway.id}.`, true);
+  }
+  if (command === 'reroll') {
+    const id = slash ? ctx.options.getString('id') : args[0]; const giveaway = giveawayById(id);
+    if (!giveaway || giveaway.guild_id !== guild.id) return reply(ctx, 'Giveaway introuvable.', true);
+    if (!giveaway.ended) return reply(ctx, 'Le giveaway doit être terminé avant un reroll.', true);
+    if (actor.id !== giveaway.organizer_id && !has(member, 'giveawaymanager')) return reply(ctx, 'Seul l’organisateur ou un administrateur peut effectuer un reroll.', true);
+    const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
+    levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
+    return reply(ctx, `Reroll effectué : ${winners.length ? winners.join(', ') : 'aucun participant.'}`);
+  }
   if (command === 'ping') return reply(ctx, `Bot opérationnel — latence : ${client.ws.ping} ms.`, true);
-  if (command === 'help') return v2Reply(ctx, helpComponents(), true);
+  if (command === 'help') return v2Reply(ctx, helpComponents(), true, [new AttachmentBuilder('assets/help.gif', { name: 'help.gif' })]);
   if (command === 'rank') {
     const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member);
     if (!target) return reply(ctx, 'Membre introuvable.', true);
@@ -516,9 +634,14 @@ client.once(Events.ClientReady, c => {
   for (const guild of c.guilds.cache.values()) for (const state of guild.voiceStates.cache.values()) {
     if (!state.member?.user.bot && state.channelId) voiceSessions.set(`${guild.id}:${state.id}`, { creditedAt: Date.now() });
   }
+  for (const giveaway of levelsDb.prepare('SELECT * FROM giveaways WHERE ended = 0').all()) scheduleGiveaway(giveaway.id, giveaway.ends_at);
 });
 client.on(Events.InteractionCreate, async i => {
   if (i.isButton() && i.customId === 'ticket:close') return closeTicket(i).catch(() => {});
+  if (i.isButton() && i.customId.startsWith('giveaway:')) {
+    const [, action, id] = i.customId.split(':');
+    return respondGiveawayButton(i, action, id).catch(() => i.reply({ content: compact('Une erreur est survenue lors du traitement du giveaway.'), ephemeral: true }).catch(() => {}));
+  }
   if (i.isStringSelectMenu() && i.customId === 'ticket:create') {
     const type = i.values[0];
     if (!ticketTypes[type]) return i.reply({ content: 'Type de ticket invalide.', ephemeral: true });
