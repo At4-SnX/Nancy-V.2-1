@@ -176,7 +176,7 @@ const ticketIntroduction = [
 function ticketPanel() {
   return {
     flags: 32_768,
-    components: [{ type: 17, accent_color: 0x1e4d70, components: [
+    components: [{ type: 17, accent_color: 0xFFFFFF, components: [
       { type: 10, content: '## <:Nancy24Photoroom:1541568231570014299> Centre de support • Nancy RP V.2' },
       { type: 10, content: ticketIntroduction },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
@@ -193,7 +193,7 @@ async function createTicket(guild, owner, type, reportedStaff = []) {
   if (alreadyOpen) return { error: `Tu as déjà un **${ticketTypes[type]}** ouvert.` };
   const alertRoleId = tickets.roles[type];
   if (!alertRoleId) return { error: `Le rôle d’alerte du **${ticketTypes[type]}** n’est pas encore configuré.` };
-  if (alertRoleId === guild.roles.everyone.id) return { error: 'Le rôle d’alerte ne peut pas être @everyone. Configurez un rôle dédié pour ce type de ticket.' };
+  if (alertRoleId === guild.roles.everyone.id) return { error: 'Le rôle d’alerte ne peut pas être everyone. Configurez un rôle dédié pour ce type de ticket.' };
   const categoryId = ticketCategoryId(tickets, type);
   if (!categoryId) return { error: 'La catégorie des tickets n’est pas encore configurée dans les variables Railway.' };
   const overwrites = [
