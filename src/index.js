@@ -324,7 +324,20 @@ async function createGiveaway(guild, channel, organizer, prize, durationMs, winn
 }
 async function respondGiveawayButton(interaction, action, id) {
   const giveaway = giveawayById(id); if (!giveaway) return interaction.reply({ content: compact('Ce giveaway n’existe plus.'), ephemeral: true });
-  if (action === 'participants') { const ids = giveawayParticipants(id); return interaction.reply({ content: compact(ids.length ? `Participants (${ids.length}) : ${ids.map(userId => `<@${userId}>`).join(', ')}` : 'Aucun participant pour le moment.'), ephemeral: true, allowedMentions: { parse: [] } }); }
+  if (action === 'participants') {
+    const ids = giveawayParticipants(id); const mentions = ids.slice(0, 100).map(userId => `<@${userId}>`);
+    return interaction.reply({
+      flags: 32_832,
+      allowedMentions: { parse: [], users: [] },
+      components: [{ type: 17, accent_color: UI.white, components: [
+        { type: 10, content: `## ${UI.logo} Giveaway • Liste des participants` },
+        { type: 10, content: `${UI.arrow} Giveaway : **__${giveaway.prize}__**\n\n> Nombre de participations : **${ids.length}**` },
+        { type: 14, divider: true, spacing: 1 },
+        { type: 10, content: mentions.length ? mentions.join(' • ') : '> Aucun participant n’est actuellement enregistré.' },
+        { type: 10, content: ids.length > 100 ? `-# Affichage limité aux 100 premiers participants sur ${ids.length}.` : '-# Liste privée visible uniquement par vous.' }
+      ] }]
+    });
+  }
   if (action === 'reroll') {
     if (!giveaway.ended) return interaction.reply({ content: compact('Le reroll est disponible une fois le giveaway terminé.'), ephemeral: true });
     if (interaction.user.id !== giveaway.organizer_id && !has(interaction.member, 'giveawaymanager')) return interaction.reply({ content: compact('Seul l’organisateur ou un administrateur peut effectuer un reroll.'), ephemeral: true });
