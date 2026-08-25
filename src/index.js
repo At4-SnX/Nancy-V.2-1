@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { AttachmentBuilder, AuditLogEvent, ChannelType, Client, EmbedBuilder, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { ActivityType, AttachmentBuilder, AuditLogEvent, ChannelType, Client, EmbedBuilder, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -735,6 +735,10 @@ async function execute(ctx, command, args, slash = false) {
 }
 
 client.once(Events.ClientReady, c => {
+  c.user.setPresence({
+    activities: [{ name: '.gg/nancyrp', type: ActivityType.Streaming, url: 'https://twitch.tv/nancyrp' }],
+    status: 'online'
+  });
   console.log(`Connecté comme ${c.user.tag} • SQLite : ${sqlitePath}`);
   for (const guild of c.guilds.cache.values()) for (const state of guild.voiceStates.cache.values()) {
     if (!state.member?.user.bot && state.channelId) voiceSessions.set(`${guild.id}:${state.id}`, { creditedAt: Date.now() });
