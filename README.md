@@ -16,7 +16,7 @@ Bot Discord de modération complet, avec commandes `/` et préfixe `&`.
 1. Créez un dépôt GitHub avec ces fichiers, sans le fichier `.env`, puis poussez-le sur GitHub.
 2. Sur Railway, créez un projet puis **Deploy from GitHub Repo** et choisissez ce dépôt.
 3. Dans **Variables**, ajoutez `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `PREFIX` (valeur `&`), `BOT_OWNER_ID` (votre identifiant Discord), et si souhaité `LOG_CHANNEL_ID`. Ajoutez aussi `TICKET_CATEGORY_ID` ou les variables de catégorie détaillées dans `.env.example`.
-4. Ajoutez un **Volume** Railway monté sur `/app/data`. Il conserve les réglages `antibot` et `antinuke` entre les redéploiements.
+4. Ajoutez un **Volume** Railway monté sur `/app/data`. Dans les variables, ajoutez `SQLITE_PATH=/app/data/levels.sqlite`. Cela conserve réglages, XP, niveaux, euros, boutique, tickets et giveaways entre les redéploiements.
 5. Railway installe les dépendances, enregistre les commandes slash, puis lance automatiquement le bot grâce à `railway.json`. Aucun domaine public n’est nécessaire : c’est un service bot permanent.
 
 Si Railway met le service en veille, utilisez une offre incluant un service toujours actif : un bot Discord doit conserver sa connexion WebSocket ouverte.

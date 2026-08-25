@@ -15,8 +15,10 @@ const UI = {
   bell: '<:Nancy38Photoroom:1541568051579850882>'
 };
 const settingsPath = path.resolve('data/settings.json');
+const sqlitePath = path.resolve(process.env.SQLITE_PATH || 'data/levels.sqlite');
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-const levelsDb = new DatabaseSync(path.resolve('data/levels.sqlite'));
+fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
+const levelsDb = new DatabaseSync(sqlitePath);
 levelsDb.exec(`
   CREATE TABLE IF NOT EXISTS member_levels (
     guild_id TEXT NOT NULL,
@@ -669,7 +671,7 @@ async function execute(ctx, command, args, slash = false) {
 }
 
 client.once(Events.ClientReady, c => {
-  console.log(`Connecté comme ${c.user.tag}`);
+  console.log(`Connecté comme ${c.user.tag} • SQLite : ${sqlitePath}`);
   for (const guild of c.guilds.cache.values()) for (const state of guild.voiceStates.cache.values()) {
     if (!state.member?.user.bot && state.channelId) voiceSessions.set(`${guild.id}:${state.id}`, { creditedAt: Date.now() });
   }
