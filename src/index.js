@@ -24,7 +24,22 @@ levelsDb.exec(`
     last_message_at INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (guild_id, user_id)
   )
+  ;CREATE TABLE IF NOT EXISTS shop_roles (
+    guild_id TEXT NOT NULL,
+    role_id TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, role_id)
+  )
+  ;CREATE TABLE IF NOT EXISTS server_metrics (
+    guild_id TEXT NOT NULL,
+    metric_date TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    metric_value INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, metric_date, metric_name)
+  )
 `);
+const levelColumns = levelsDb.prepare('PRAGMA table_info(member_levels)').all().map(column => column.name);
+if (!levelColumns.includes('ncoins')) levelsDb.exec('ALTER TABLE member_levels ADD COLUMN ncoins INTEGER NOT NULL DEFAULT 0');
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { /* first boot */ }
 const save = () => fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
@@ -36,15 +51,32 @@ const config = guildId => {
   return guildConfig;
 };
 function levelRecord(guildId, userId) {
-  return levelsDb.prepare('SELECT xp, last_message_at FROM member_levels WHERE guild_id = ? AND user_id = ?').get(guildId, userId) ?? { xp: 0, last_message_at: 0 };
+  return levelsDb.prepare('SELECT xp, last_message_at, ncoins FROM member_levels WHERE guild_id = ? AND user_id = ?').get(guildId, userId) ?? { xp: 0, last_message_at: 0, ncoins: 0 };
 }
-function saveLevelRecord(guildId, userId, xp, lastMessageAt) {
-  levelsDb.prepare(`INSERT INTO member_levels (guild_id, user_id, xp, last_message_at) VALUES (?, ?, ?, ?)
-    ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp, last_message_at = excluded.last_message_at`).run(guildId, userId, xp, lastMessageAt);
+function saveLevelRecord(guildId, userId, xp, lastMessageAt, ncoins = levelRecord(guildId, userId).ncoins) {
+  levelsDb.prepare(`INSERT INTO member_levels (guild_id, user_id, xp, last_message_at, ncoins) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp, last_message_at = excluded.last_message_at, ncoins = excluded.ncoins`).run(guildId, userId, xp, lastMessageAt, ncoins);
 }
 function leaderboardRecords(guildId) {
   return levelsDb.prepare('SELECT user_id, xp FROM member_levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 10').all(guildId);
 }
+function adjustCoins(guildId, userId, amount) {
+  const user = levelRecord(guildId, userId);
+  saveLevelRecord(guildId, userId, user.xp, user.last_message_at, Math.max(0, user.ncoins + amount));
+  return Math.max(0, user.ncoins + amount);
+}
+function dayKey(offset = 0) { const day = new Date(Date.now() - offset * 86_400_000); return day.toISOString().slice(0, 10); }
+function incrementMetric(guildId, metricName, amount = 1) {
+  levelsDb.prepare(`INSERT INTO server_metrics (guild_id, metric_date, metric_name, metric_value) VALUES (?, ?, ?, ?)
+    ON CONFLICT(guild_id, metric_date, metric_name) DO UPDATE SET metric_value = metric_value + excluded.metric_value`).run(guildId, dayKey(), metricName, amount);
+}
+function weeklyMetric(guildId, metricName) {
+  const read = levelsDb.prepare('SELECT metric_date, metric_value FROM server_metrics WHERE guild_id = ? AND metric_name = ? AND metric_date >= ?').all(guildId, metricName, dayKey(6));
+  const values = new Map(read.map(item => [item.metric_date, item.metric_value]));
+  return Array.from({ length: 7 }, (_, index) => ({ date: dayKey(6 - index), value: values.get(dayKey(6 - index)) ?? 0 }));
+}
+function shopItems(guildId) { return levelsDb.prepare('SELECT role_id, price FROM shop_roles WHERE guild_id = ? ORDER BY price ASC').all(guildId); }
+function bar(value, maximum) { return value > 0 ? '▰'.repeat(Math.max(1, Math.round((value / Math.max(1, maximum)) * 10))) : '—'; }
 function migrateLegacyLevels() {
   for (const [guildId, guildConfig] of Object.entries(settings)) {
     for (const [userId, record] of Object.entries(guildConfig.levels?.users ?? {})) {
@@ -61,7 +93,7 @@ const client = new Client({
   allowedMentions: { parse: [], repliedUser: false }
 });
 const dangerPerms = PermissionFlagsBits.Administrator | PermissionFlagsBits.ManageGuild | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.ManageRoles | PermissionFlagsBits.BanMembers | PermissionFlagsBits.KickMembers | PermissionFlagsBits.ModerateMembers;
-const staffCommands = new Set(['ping', 'help', 'rank', 'leaderboard', 'kick', 'mute', 'unmute', 'clear', 'lock', 'unlock', 'slowmode', 'ticketclose']);
+const staffCommands = new Set(['ping', 'help', 'rank', 'leaderboard', 'coins', 'shop', 'stats', 'statistique', 'kick', 'mute', 'unmute', 'clear', 'lock', 'unlock', 'slowmode', 'ticketclose']);
 const levelMilestones = [1, 10, 20, 30, 40, 50, 60, 70];
 const maxLevel = 70;
 const xpForLevel = level => level * level * 100;
@@ -87,7 +119,7 @@ function targetId(value) { return value?.replace(/[<#@!>&]/g, ''); }
 function roleName(value) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function isStaffMember(member) { return member.roles.cache.some(role => roleName(role.name) === 'equipe staff'); }
 function has(member, command) {
-  if (['help', 'rank', 'leaderboard'].includes(command)) return true;
+  if (['help', 'rank', 'leaderboard', 'coins', 'shop', 'stats', 'statistique'].includes(command)) return true;
   if (member.id === member.guild.ownerId) return true;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   const names = member.roles.cache.map(role => roleName(role.name));
@@ -120,7 +152,8 @@ function helpComponents() { return [{ type: 17, accent_color: UI.white, componen
   { type: 14, divider: true, spacing: 1 },
   { type: 14, divider: true, spacing: 1 },
   { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Modération\n\`> ${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
-  { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression\n\`> ${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le**__ top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** toutes les**__ 20 secondes__**. Vocal : **__4 XP toutes les 15 secondes__**.` },
+  { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression & Nancy Coins\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le **__top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** et **__1 à 10 N-Coins__** toutes les 20 secondes. Vocal : **__4 XP et 1 N-Coin__** toutes les 15 secondes.` },
+  { type: 10, content: `### ${UI.logo} Boutique & statistiques\n\`${prefix}coins\` consulte votre portefeuille. \`${prefix}shop\` présente les rôles disponibles et \`${prefix}buy <rôle>\` confirme un achat.\n\`${prefix}stats\` affiche les graphiques d’activité du serveur.` },
   { type: 10, content: `### <:Nancy38Photoroom:1541568051579850882> Tickets\n Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec \`${prefix}ticketclose\`.` },
   { type: 10, content: `### ${UI.notice} Accès aux fonctionnalités\n> Les réglages sensibles sont réservés aux administrateurs. L’équipe staff dispose des outils de modération courants. Les commandes de consultation restent accessibles à tous.` },
   { type: 10, content: '-# Nancy RP V.2 • Utilisez chaque outil avec discernement et conformément au règlement du serveur.' }
@@ -134,13 +167,13 @@ async function applyLevelRoles(member, level) {
     if (role?.editable) await member.roles.add(role, `Récompense niveau ${milestone}`).catch(() => {});
   }
 }
-async function addXp(member, amount) {
+async function addXp(member, amount, coins = 0) {
   if (amount <= 0) return;
   const user = levelRecord(member.guild.id, member.id);
   const oldLevel = levelFromXp(user.xp);
   const xp = Math.min(xpForLevel(maxLevel), user.xp + amount);
   const newLevel = levelFromXp(xp);
-  saveLevelRecord(member.guild.id, member.id, xp, user.last_message_at);
+  saveLevelRecord(member.guild.id, member.id, xp, user.last_message_at, user.ncoins + coins);
   if (newLevel > oldLevel) {
     await applyLevelRoles(member, newLevel);
     const levelChannelId = config(member.guild.id).levels.channelId;
@@ -168,7 +201,8 @@ async function creditVoice(member, now = Date.now()) {
   const key = `${member.guild.id}:${member.id}`; const session = voiceSessions.get(key); if (!session) return;
   const periods = Math.floor((now - session.creditedAt) / 15_000); if (periods < 1) return;
   session.creditedAt += periods * 15_000;
-  await addXp(member, periods * 4);
+  await addXp(member, periods * 4, periods);
+  incrementMetric(member.guild.id, 'voice_seconds', periods * 15);
 }
 async function enforceAntiSpam(message) {
   const anti = config(message.guild.id).antispam;
@@ -302,6 +336,67 @@ async function execute(ctx, command, args, slash = false) {
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: lines.join('\n\n') },
       { type: 10, content: '-# Continue à écrire et à participer en vocal pour progresser dans le classement.' }
+    ] }], true);
+  }
+  if (command === 'coins') {
+    const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member);
+    if (!target) return reply(ctx, 'Membre introuvable.', true);
+    const coins = levelRecord(guild.id, target.id).ncoins;
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Portefeuille • Nancy Coins` },
+      { type: 10, content: `${UI.arrow} ${target} possède actuellement **__${coins.toLocaleString('fr-FR')} N-Coin${coins === 1 ? '' : 's'}__**.\n\n> Gagnez entre **1 et 10 N-Coins** grâce à vos messages, selon leur longueur, et **1 N-Coin toutes les 15 secondes** en salon vocal.` },
+      { type: 10, content: `-# Utilisez \`${prefix}shop\` pour consulter les rôles disponibles.` }
+    ] }], true);
+  }
+  if (command === 'shop') {
+    const items = shopItems(guild.id);
+    if (!items.length) return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Boutique • Nancy Coins` }, { type: 10, content: `${UI.arrow} La boutique ne contient pas encore de rôle.\n\n> Un administrateur peut ajouter un rôle avec \`${prefix}shoprole <rôle> <prix>\`.` }] }], true);
+    const lines = await Promise.all(items.map(async item => {
+      const role = await guild.roles.fetch(item.role_id).catch(() => null);
+      return role ? `${UI.arrow} ${role} — **__${item.price.toLocaleString('fr-FR')} N-Coins__**` : null;
+    }));
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Boutique officielle • Nancy Coins` },
+      { type: 10, content: `${UI.arrow} Découvrez les rôles disponibles à l’achat. Chaque rôle est définitivement attribué après validation de votre paiement.` },
+      { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: lines.filter(Boolean).join('\n') || 'Aucun rôle disponible.' },
+      { type: 10, content: `-# Pour acheter : \`${prefix}buy <rôle>\` • Consultez votre solde avec \`${prefix}coins\`.` }
+    ] }], true);
+  }
+  if (command === 'buy') {
+    const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]);
+    const item = shopItems(guild.id).find(entry => entry.role_id === roleId);
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!item || !role) return reply(ctx, 'Ce rôle n’est pas disponible dans la boutique.', true);
+    if (member.roles.cache.has(role.id)) return reply(ctx, 'Vous possédez déjà ce rôle.', true);
+    if (!role.editable) return reply(ctx, 'Je ne peux pas attribuer ce rôle. Placez mon rôle au-dessus de celui-ci.', true);
+    const wallet = levelRecord(guild.id, member.id);
+    if (wallet.ncoins < item.price) return reply(ctx, `Solde insuffisant : ${item.price - wallet.ncoins} N-Coins manquants.`, true);
+    adjustCoins(guild.id, member.id, -item.price);
+    try { await member.roles.add(role, `Achat boutique par ${actor.tag}`); }
+    catch { adjustCoins(guild.id, member.id, item.price); return reply(ctx, 'L’achat n’a pas pu être finalisé. Vos N-Coins ont été remboursés.', true); }
+    return reply(ctx, `Achat validé : rôle ${role.name} obtenu pour ${item.price} N-Coins.`);
+  }
+  if (command === 'shoprole') {
+    const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]);
+    const price = Number(slash ? ctx.options.getInteger('prix') : args[1]);
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!role || role.managed || !role.editable || !Number.isInteger(price) || price < 1) return reply(ctx, 'Indiquez un rôle attribuable et un prix supérieur à 0.', true);
+    levelsDb.prepare(`INSERT INTO shop_roles (guild_id, role_id, price) VALUES (?, ?, ?) ON CONFLICT(guild_id, role_id) DO UPDATE SET price = excluded.price`).run(guild.id, role.id, price);
+    return reply(ctx, `Boutique mise à jour : ${role.name} coûte désormais ${price} N-Coins.`);
+  }
+  if (command === 'stats' || command === 'statistique') {
+    const joins = weeklyMetric(guild.id, 'joins'); const messages = weeklyMetric(guild.id, 'messages'); const voice = weeklyMetric(guild.id, 'voice_seconds');
+    const chart = (records, suffix = '') => records.map(record => `${record.date.slice(5).replace('-', '/')}  ${bar(record.value, Math.max(...records.map(row => row.value)))}  **${record.value}${suffix}**`).join('\n');
+    const joinTotal = joins.reduce((total, record) => total + record.value, 0); const messageTotal = messages.reduce((total, record) => total + record.value, 0); const voiceMinutes = Math.round(voice.reduce((total, record) => total + record.value, 0) / 60);
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Statistiques • Nancy RP V.2` },
+      { type: 10, content: `${UI.arrow} Synthèse des **__sept derniers jours__** • ${guild.memberCount.toLocaleString('fr-FR')} membres actuels.` },
+      { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: `### ${UI.bell} Arrivées • moyenne ${Math.round((joinTotal / 7) * 10) / 10}/jour\n${chart(joins)}` },
+      { type: 10, content: `### ${UI.settings} Messages • ${messageTotal.toLocaleString('fr-FR')} au total\n${chart(messages)}` },
+      { type: 10, content: `### ${UI.notice} Activité vocale • ${voiceMinutes.toLocaleString('fr-FR')} minutes\n${chart(voice.map(record => ({ ...record, value: Math.round(record.value / 60) })), ' min')}` },
+      { type: 10, content: '-# Les données sont collectées depuis l’activation de cette version du bot.' }
     ] }], true);
   }
   if (command === 'levelroles') {
@@ -459,7 +554,9 @@ client.on(Events.MessageCreate, async m => {
     if (Date.now() - user.last_message_at >= 20_000) {
       saveLevelRecord(m.guild.id, m.author.id, user.xp, Date.now());
       const gained = Math.min(25, 8 + Math.floor(m.content.trim().length / 25));
-      await addXp(m.member, gained);
+      const coins = Math.min(10, 1 + Math.floor(m.content.trim().length / 30));
+      await addXp(m.member, gained, coins);
+      incrementMetric(m.guild.id, 'messages');
     }
   }
   if (!m.content.startsWith(prefix)) return;
@@ -478,7 +575,12 @@ setInterval(async () => {
     if (member?.voice.channelId) await creditVoice(member); else voiceSessions.delete(key);
   }
 }, 15_000);
-client.on(Events.GuildMemberAdd, async member => { if (!member.user.bot || !config(member.guild.id).antibot) return; await member.ban({ reason: 'Antibot activé' }).catch(() => {}); await log(member.guild, `**ANTIBOT** — ${member.user.tag} banni automatiquement.`); });
+client.on(Events.GuildMemberAdd, async member => {
+  if (!member.user.bot) incrementMetric(member.guild.id, 'joins');
+  if (!member.user.bot || !config(member.guild.id).antibot) return;
+  await member.ban({ reason: 'Antibot activé' }).catch(() => {});
+  await log(member.guild, `**ANTIBOT** — ${member.user.tag} banni automatiquement.`);
+});
 
 const actions = new Map();
 const auditTypes = new Map([[Events.ChannelCreate, AuditLogEvent.ChannelCreate], [Events.ChannelDelete, AuditLogEvent.ChannelDelete], [Events.ChannelUpdate, AuditLogEvent.ChannelUpdate], [Events.GuildRoleCreate, AuditLogEvent.RoleCreate], [Events.GuildRoleDelete, AuditLogEvent.RoleDelete], [Events.GuildRoleUpdate, AuditLogEvent.RoleUpdate], [Events.GuildBanAdd, AuditLogEvent.MemberBanAdd], [Events.GuildMemberRemove, AuditLogEvent.MemberKick]]);

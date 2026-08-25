@@ -42,6 +42,11 @@ Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json
 | `/antispam état messages secondes timeout` | `&antispam on/off [messages] [secondes] [timeout]` | Configurer l’antispam |
 | `/rank [membre]` | `&rank [membre]` | Consulter un niveau et l’XP |
 | `/leaderboard` | `&leaderboard` | Top 10 des niveaux |
+| `/coins [membre]` | `&coins [membre]` | Consulter les Nancy Coins |
+| `/shop` | `&shop` | Voir les rôles de la boutique |
+| `/buy rôle` | `&buy <rôle>` | Acheter un rôle avec ses Nancy Coins |
+| `/shoprole rôle prix` | `&shoprole <rôle> <prix>` | Ajouter ou mettre à jour un rôle de boutique (admin) |
+| `/statistique` | `&stats` | Voir les graphiques d’activité du serveur |
 | `/levelrole niveau rôle` | `&levelrole <niveau> <rôle>` | Configurer un rôle de récompense (admin) |
 | `/levelroles` | `&levelroles` | Voir les huit rôles de niveau |
 | `/ticketrole type rôle` | `&ticketrole <type> <rôle>` | Définir le rôle ayant accès par type de ticket (admin) |
@@ -70,6 +75,12 @@ L’anti-lien est toujours actif : les messages contenant une invitation `discor
 - Les paliers de rôle sont : **1, 10, 20, 30, 40, 50, 60 et 70**.
 
 Configurez les huit rôles avec `/levelrole` (ou `&levelrole`) : par exemple `/levelrole niveau:10 role:@Citoyen confirmé`. Le rôle du bot doit être placé au-dessus de tous les rôles de niveau. Les membres peuvent consulter leur progression avec `/rank` et le classement avec `/leaderboard`.
+
+## Nancy Coins et boutique
+
+Chaque message validé rapporte entre **1 et 10 Nancy Coins**, selon sa longueur. Le vocal rapporte **1 Nancy Coin toutes les 15 secondes**. Les rôles de boutique sont ajoutés par un administrateur avec `/shoprole role:@Rôle prix:500`. Les membres utilisent ensuite `/shop`, `/coins` et `/buy` pour consulter et acheter les rôles.
+
+Les XP, niveaux et Nancy Coins sont stockés dans `data/levels.sqlite`. Montez impérativement le volume Railway sur `/app/data` afin de les conserver entre les redéploiements.
 
 Configurez aussi le salon réservé aux annonces avec `/levelchannel salon:#niveaux`. Lors d’un passage de niveau, le bot y publie un message **Discord Components V2** Nancy RP V.2, avec le GIF `A.gif` sous le texte.
 
