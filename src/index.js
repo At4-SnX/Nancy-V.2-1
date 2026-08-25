@@ -108,10 +108,10 @@ async function addXp(member, amount) {
         flags: 32_768,
         components: [{
           type: 17,
-          accent_color: 0x1e4d70,
+          accent_color: 0xFFFFFF,
           components: [
-            { type: 10, content: '## 🎉 Nouveau niveau atteint !' },
-            { type: 10, content: `${member} vient de passer au **niveau ${newLevel}** !\n\nTa régularité, que ce soit par ton activité écrite ou vocale, te fait progresser parmi les citoyens les plus investis de Nancy RP V.2. Continue ainsi pour atteindre le niveau maximal et débloquer les prochaines récompenses.` },
+            { type: 10, content: '## <:Nancy__25_removebgpreview:1541568070168875010> Nouveau niveau atteint !' },
+            { type: 10, content: `<:Nancy23Photoroom:1541568232756879370> **__${member}__** vient de passer au **__niveau ${newLevel}__** !` },
             { type: 12, items: [{ media: { url: 'attachment://A.gif' } }] },
             { type: 10, content: `-# Nancy RP V.2 • Niveau ${newLevel} / ${maxLevel}` }
           ]
