@@ -75,12 +75,12 @@ async function v2Reply(ctx, components, ephemeral = false) {
 }
 function progressBar(value) { const filled = Math.max(0, Math.min(10, Math.round(value * 10))); return `${'▰'.repeat(filled)}${'▱'.repeat(10 - filled)}`; }
 function helpComponents() { return [{ type: 17, accent_color: 0x1e4d70, components: [
-  { type: 10, content: '## ✦ Nancy RP V.2 • Centre de commandes' },
-  { type: 10, content: 'Bienvenue dans le centre de gestion du serveur. Toutes les commandes existent aussi avec le préfixe `&`.' },
+  { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Nancy RP V.2 • Centre de commandes' },
+  { type: 10, content: '> Bienvenue dans le centre de **__gestion du serveur__**. **__Toutes les commandes existent aussi avec le préfixe__** `&`.' },
   { type: 14, divider: true, spacing: 1 },
-  { type: 10, content: `### 🛡️ Modération\n\`${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
-  { type: 10, content: `### 🏅 Progression\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le top 10 actualisé en direct.\nMessages : **8 à 25 XP** toutes les 20 secondes. Vocal : **4 XP toutes les 15 secondes**.` },
-  { type: 10, content: `### 🎫 Tickets\nUtilise le panneau dédié pour créer un ticket. Un staff peut fermer un ticket avec \`${prefix}ticketclose\`.` },
+  { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Modération\n\`> ${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
+  { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression\n\`> ${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le**__ top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** toutes les**__ 20 secondes__**. Vocal : **__4 XP toutes les 15 secondes__**.` },
+  { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Tickets\n> Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec `${prefix}ticketclose`.` },
   { type: 10, content: `-# Réservé Administrateur : antibot, antinuke, configuration niveaux et tickets. Équipe Staff : modération basique.` }
 ] }]; }
 
