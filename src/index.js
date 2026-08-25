@@ -4,6 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const prefix = process.env.PREFIX || '&';
+const UI = {
+  white: 0xFFFFFF,
+  arrow: '<:Nancy23Photoroom:1541568232756879370>',
+  logo: '<:Nancy26Photoroom:1541568067836973096>',
+  notice: '<:Nancy__25_removebgpreview:1541568070168875010>',
+  settings: '<:Nancy24Photoroom:1541568231570014299>',
+  bell: '<:Nancy38Photoroom:1541568051579850882>'
+};
 const settingsPath = path.resolve('data/settings.json');
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
 let settings = {};
@@ -74,14 +82,16 @@ async function v2Reply(ctx, components, ephemeral = false) {
   return ctx.reply(payload).catch(() => ctx.channel?.send({ flags: 32_768, components }));
 }
 function progressBar(value) { const filled = Math.max(0, Math.min(10, Math.round(value * 10))); return `${'▰'.repeat(filled)}${'▱'.repeat(10 - filled)}`; }
-function helpComponents() { return [{ type: 17, accent_color: 0xFFFFFF, components: [
-  { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Nancy RP V.2 • Centre de commandes' },
-  { type: 10, content: '> Bienvenue dans le centre de **__gestion du serveur__**. **__Toutes les commandes existent aussi avec le préfixe__** `&`.' },
+function helpComponents() { return [{ type: 17, accent_color: UI.white, components: [
+  { type: 10, content: `## ${UI.logo} Nancy RP V.2 • Centre de commandes` },
+  { type: 10, content: `${UI.arrow} **__Bienvenue dans le centre de gestion__**. Retrouvez ci-dessous les fonctionnalités mises à disposition afin d’assurer une expérience claire, sécurisée et agréable sur Nancy RP V.2.\n\n> Toutes les commandes sont également disponibles avec le préfixe \`${prefix}\`.` },
+  { type: 14, divider: true, spacing: 1 },
   { type: 14, divider: true, spacing: 1 },
   { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Modération\n\`> ${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
   { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression\n\`> ${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le**__ top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** toutes les**__ 20 secondes__**. Vocal : **__4 XP toutes les 15 secondes__**.` },
   { type: 10, content: `### <:Nancy38Photoroom:1541568051579850882> Tickets\n Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec \`${prefix}ticketclose\`.` },
-  { type: 10, content: `-# Réservé Administrateur : antibot, antinuke, configuration niveaux et tickets. Équipe Staff : modération basique.` }
+  { type: 10, content: `### ${UI.notice} Accès aux fonctionnalités\n> Les réglages sensibles sont réservés aux administrateurs. L’équipe staff dispose des outils de modération courants. Les commandes de consultation restent accessibles à tous.` },
+  { type: 10, content: '-# Nancy RP V.2 • Utilisez chaque outil avec discernement et conformément au règlement du serveur.' }
 ] }]; }
 
 async function applyLevelRoles(member, level) {
@@ -108,10 +118,10 @@ async function addXp(member, amount) {
         flags: 32_768,
         components: [{
           type: 17,
-          accent_color: 0xFFFFFF,
+          accent_color: UI.white,
           components: [
-            { type: 10, content: '## <:Nancy__25_removebgpreview:1541568070168875010> Nouveau niveau atteint !' },
-            { type: 10, content: `<:Nancy23Photoroom:1541568232756879370> **__${member}__** vient de passer au **__niveau ${newLevel}__** !` },
+            { type: 10, content: `## ${UI.logo} Progression • Nouveau niveau atteint` },
+            { type: 10, content: `${UI.arrow} Félicitations ${member} ! Votre activité vous permet d’atteindre le **__niveau ${newLevel}__**.\n\n> Poursuivez votre participation afin de débloquer les prochaines récompenses et de progresser au sein de la communauté.` },
             { type: 12, items: [{ media: { url: 'attachment://A.gif' } }] },
             { type: 10, content: `-# Nancy RP V.2 • Niveau ${newLevel} / ${maxLevel}` }
           ]
@@ -139,10 +149,10 @@ async function enforceAntiSpam(message) {
   const timeoutMs = duration(anti.timeout) ?? 600_000;
   if (message.member.moderatable) await message.member.timeout(timeoutMs, `Antispam : ${anti.limit} messages en ${anti.interval} secondes`).catch(() => {});
   await log(message.guild, `**ANTISPAM** — ${message.author.tag} sanctionné après ${anti.limit} messages en ${anti.interval} secondes.`);
-  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: 0xc0392b, components: [
-    { type: 10, content: '## ⚠️ Protection antispam' },
-    { type: 10, content: `${message.author}, tu as envoyé trop de messages trop rapidement. Un timeout de **${anti.timeout}** a été appliqué. Merci de patienter avant de reprendre la conversation.` },
-    { type: 10, content: `-# Limite configurée : ${anti.limit} messages en ${anti.interval} secondes.` }
+  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: UI.white, components: [
+    { type: 10, content: `## ${UI.notice} Protection antispam` },
+    { type: 10, content: `${UI.arrow} ${message.author}, votre activité a dépassé la limite de messages autorisée. Une mesure de modération temporaire de **${anti.timeout}** a été appliquée.\n\n> Merci de patienter avant de reprendre la conversation afin de préserver la lisibilité du salon.` },
+    { type: 10, content: `-# Paramètre actif : ${anti.limit} messages sur ${anti.interval} secondes.` }
   ] }] }).catch(() => null);
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
@@ -153,10 +163,10 @@ async function enforceAntiLink(message) {
   if (!forbidden) return false;
   await message.delete().catch(() => {});
   await log(message.guild, `**ANTILIEN** — Message de ${message.author.tag} supprimé : lien non autorisé.`);
-  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: 0xc0392b, components: [
-    { type: 10, content: '## 🔗 Lien non autorisé' },
-    { type: 10, content: `${message.author}, les invitations **discord.gg/** ne sont pas autorisées sur Nancy RP V.2. Les autres liens restent autorisés.` },
-    { type: 10, content: '-# Ton message a été supprimé automatiquement par la protection anti-lien.' }
+  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: UI.white, components: [
+    { type: 10, content: `## ${UI.notice} Invitation Discord non autorisée` },
+    { type: 10, content: `${UI.arrow} ${message.author}, les invitations **discord.gg/** ne sont pas autorisées sur Nancy RP V.2. Votre message a été retiré automatiquement.\n\n> Les autres liens restent autorisés conformément aux règles du serveur.` },
+    { type: 10, content: '-# Protection automatique • Nancy RP V.2' }
   ] }] }).catch(() => null);
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
@@ -176,12 +186,12 @@ const ticketIntroduction = [
 function ticketPanel() {
   return {
     flags: 32_768,
-    components: [{ type: 17, accent_color: 0xFFFFFF, components: [
-      { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Centre de support • Nancy RP V.2' },
+    components: [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Centre de support • Nancy RP V.2` },
       { type: 10, content: ticketIntroduction },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
       { type: 14, divider: true, spacing: 1 },
-      { type: 10, content: '### <:Nancy__25_removebgpreview:1541568070168875010> Informations importantes\n> <:Nancy23Photoroom:1541568232756879370> Votre demande ouvrira un **__salon privé__**. Décrivez votre situation avec **__précision__** et joignez, si nécessaire, les **__éléments utiles à son traitement__**. __**Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais**__.' },
+      { type: 10, content: `### ${UI.notice} Informations importantes\n> ${UI.arrow} Votre demande ouvrira un **__salon privé__**. Décrivez votre situation avec **__précision__** et joignez, si nécessaire, les **__éléments utiles à son traitement__**.\n\n> **__Une équipe dédiée prendra votre dossier en charge dans les meilleurs délais.__**` },
       { type: 1, components: [{ type: 3, custom_id: 'ticket:create', placeholder: 'Choisir une catégorie de ticket', options: Object.entries(ticketTypes).map(([value, label]) => ({ label, value })) }] }
     ] }],
     files: [new AttachmentBuilder('assets/ticket.gif', { name: 'ticket.gif' })]
@@ -213,9 +223,9 @@ async function createTicket(guild, owner, type, reportedStaff = []) {
   const reportedText = reportedStaff.length ? `\n\n**Membre(s) du staff signalé(s) :** ${reportedStaff.map(id => `<@${id}>`).join(', ')}` : '';
   await channel.send({
     flags: 32_768,
-    components: [{ type: 17, accent_color: 0x1e4d70, components: [
-      { type: 10, content: `## ${ticketTypes[type]}` },
-      { type: 10, content: `Bienvenue ${owner}. Votre dossier a été créé avec succès. Présentez votre demande de manière précise et structurée ; l’équipe **${alertRole?.name ?? 'concernée'}** a été notifiée et prendra votre dossier en charge.${reportedText}` },
+    components: [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} ${ticketTypes[type]}` },
+      { type: 10, content: `${UI.arrow} Bienvenue ${owner}. Votre dossier a été créé avec succès.\n\n> Présentez votre demande de manière **__précise, claire et structurée__**. L’équipe **${alertRole?.name ?? 'concernée'}** a été notifiée et prendra votre dossier en charge.${reportedText}` },
       { type: 14, divider: true, spacing: 1 },
       { type: 1, components: [{ type: 2, style: 4, custom_id: 'ticket:close', label: 'Fermer le ticket' }] }
     ] }]
@@ -238,7 +248,7 @@ async function execute(ctx, command, args, slash = false) {
   if (!has(member, command)) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
-  if (command === 'ping') return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## 🛰️ Nancy RP V.2 • État du bot' }, { type: 10, content: `Le bot est connecté et opérationnel. Latence actuelle : **${client.ws.ping} ms**.` }, { type: 10, content: '-# Les systèmes de modération, tickets et progression sont prêts.' }] }], true);
+  if (command === 'ping') return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.settings} Nancy RP V.2 • État du système` }, { type: 10, content: `${UI.arrow} Le bot est connecté et pleinement opérationnel.\n\n> Latence actuelle : **${client.ws.ping} ms**` }, { type: 10, content: `-# ${UI.bell} Modération, tickets et progression sont disponibles.` }] }], true);
   if (command === 'help') return v2Reply(ctx, helpComponents(), true);
   if (command === 'rank') {
     const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member);
@@ -246,24 +256,24 @@ async function execute(ctx, command, args, slash = false) {
     const xp = config(guild.id).levels.users[target.id]?.xp ?? 0;
     const level = levelFromXp(xp); const currentFloor = xpForLevel(level); const next = level >= maxLevel ? null : xpForLevel(level + 1);
     const ratio = next ? (xp - currentFloor) / (next - currentFloor) : 1;
-    return v2Reply(ctx, [{ type: 17, accent_color: 0xFFFFFF, components: [
-      { type: 10, content: `## <:Nancy26Photoroom:1541568067836973096> Niveau • ${target.user.tag}` },
-      { type: 10, content: `${target}\n\n### Niveau ${level} / ${maxLevel}\n\`${progressBar(ratio)}\` **${Math.floor(ratio * 100)} %**` },
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Profil de progression` },
+      { type: 10, content: `${UI.arrow} Profil de ${target}\n\n### Niveau **${level} / ${maxLevel}**\n\`${progressBar(ratio)}\` **${Math.floor(ratio * 100)} %**` },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: next ? `**${xp.toLocaleString('fr-FR')} XP** accumulée • encore **${(next - xp).toLocaleString('fr-FR')} XP** avant le niveau **${level + 1}**.\n\n-# Activité message et présence en vocal contribuent toutes deux à ta progression.` : `**${xp.toLocaleString('fr-FR')} XP** accumulée • tu as atteint le **niveau maximum**.\n\n-# Félicitations : ton parcours est complété.` }
     ] }], true);
   }
   if (command === 'leaderboard') {
     const users = Object.entries(config(guild.id).levels.users).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
-    if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: 0x1e4d70, components: [{ type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Classement Nancy RP V.2' }, { type: 10, content: 'Aucune expérience n’a encore été gagnée. Lance la progression en participant au serveur !' }] }], true);
+    if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Classement • Nancy RP V.2` }, { type: 10, content: `${UI.arrow} Aucun point d’expérience n’a encore été enregistré.\n\n> Participez aux échanges écrits et vocaux pour lancer votre progression.` }] }], true);
     const lines = await Promise.all(users.map(async ([id, data], index) => {
       const ranked = await guild.members.fetch(id).catch(() => null);
       const medal = ['🥇', '🥈', '🥉'][index] ?? `**${index + 1}.**`;
       return `${medal} **${ranked?.user.tag ?? `Utilisateur ${id}`}**\n> Niveau **${levelFromXp(data.xp)}** • **${data.xp.toLocaleString('fr-FR')} XP**`;
     }));
-    return v2Reply(ctx, [{ type: 17, accent_color: 0xFFFFFF, components: [
-      { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Classement officiel • Nancy RP V.2' },
-      { type: 10, content: '<:Nancy23Photoroom:1541568232756879370> Voici les **__citoyens les plus actifs__**. Ce classement est calculé à partir des **__données XP__** au moment de la commande.' },
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Classement officiel • Nancy RP V.2` },
+      { type: 10, content: `${UI.arrow} Voici les **__citoyens les plus actifs__**. Ce classement est calculé à partir des **__données XP__** au moment de la commande.` },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: lines.join('\n\n') },
       { type: 10, content: '-# Continue à écrire et à participer en vocal pour progresser dans le classement.' }
@@ -396,9 +406,9 @@ client.on(Events.InteractionCreate, async i => {
       if (!staffMembers.length) return i.reply({ content: 'Aucun membre avec le rôle Équipe Staff n’est disponible.', ephemeral: true });
       return i.reply({
         flags: 32_832,
-        components: [{ type: 17, accent_color: 0xFFFFFF, components: [
-          { type: 10, content: '## <:Nancy46Photoroom:1541572047564439593> Signalement d’un membre du staff' },
-          { type: 10, content: 'Sélectionne le ou les membres possédant le rôle **Équipe Staff** que tu souhaites signaler.' },
+        components: [{ type: 17, accent_color: UI.white, components: [
+          { type: 10, content: `## ${UI.logo} Signalement d’un membre du staff` },
+          { type: 10, content: `${UI.arrow} Sélectionnez le ou les membres possédant le rôle **__Équipe Staff__** concernés par votre signalement.\n\n> Votre sélection sera ajoutée au dossier de manière confidentielle afin de faciliter son traitement.` },
           { type: 1, components: [{ type: 3, custom_id: 'ticket:staff-targets', placeholder: 'Sélectionner un ou plusieurs staffs', min_values: 1, max_values: staffMembers.length, options: staffMembers.map(member => ({ label: member.displayName.slice(0, 100), description: member.user.tag.slice(0, 100), value: member.id })) }] }
         ] }]
       });
