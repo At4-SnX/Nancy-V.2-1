@@ -77,6 +77,7 @@ function weeklyMetric(guildId, metricName) {
 }
 function shopItems(guildId) { return levelsDb.prepare('SELECT role_id, price FROM shop_roles WHERE guild_id = ? ORDER BY price ASC').all(guildId); }
 function bar(value, maximum) { return value > 0 ? '▰'.repeat(Math.max(1, Math.round((value / Math.max(1, maximum)) * 10))) : '—'; }
+function euros(amount) { return `${Number(amount).toLocaleString('fr-FR')} €`; }
 function migrateLegacyLevels() {
   for (const [guildId, guildConfig] of Object.entries(settings)) {
     for (const [userId, record] of Object.entries(guildConfig.levels?.users ?? {})) {
@@ -152,7 +153,7 @@ function helpComponents() { return [{ type: 17, accent_color: UI.white, componen
   { type: 14, divider: true, spacing: 1 },
   { type: 14, divider: true, spacing: 1 },
   { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Modération\n\`> ${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
-  { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression & Nancy Coins\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le **__top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** et **__1 à 10 N-Coins__** toutes les 20 secondes. Vocal : **__4 XP et 1 N-Coin__** toutes les 15 secondes.` },
+  { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression & économies\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le **__top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** et **__1 à 10 €__** toutes les 20 secondes. Vocal : **__4 XP et 1 €__** toutes les 15 secondes.` },
   { type: 10, content: `### ${UI.logo} Boutique & statistiques\n\`${prefix}coins\` consulte votre portefeuille. \`${prefix}shop\` présente les rôles disponibles et \`${prefix}buy <rôle>\` confirme un achat.\n\`${prefix}stats\` affiche les graphiques d’activité du serveur.` },
   { type: 10, content: `### <:Nancy38Photoroom:1541568051579850882> Tickets\n Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec \`${prefix}ticketclose\`.` },
   { type: 10, content: `### ${UI.notice} Accès aux fonctionnalités\n> Les réglages sensibles sont réservés aux administrateurs. L’équipe staff dispose des outils de modération courants. Les commandes de consultation restent accessibles à tous.` },
@@ -343,20 +344,20 @@ async function execute(ctx, command, args, slash = false) {
     if (!target) return reply(ctx, 'Membre introuvable.', true);
     const coins = levelRecord(guild.id, target.id).ncoins;
     return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
-      { type: 10, content: `## ${UI.logo} Portefeuille • Nancy Coins` },
-      { type: 10, content: `${UI.arrow} ${target} possède actuellement **__${coins.toLocaleString('fr-FR')} N-Coin${coins === 1 ? '' : 's'}__**.\n\n> Gagnez entre **1 et 10 N-Coins** grâce à vos messages, selon leur longueur, et **1 N-Coin toutes les 15 secondes** en salon vocal.` },
+      { type: 10, content: `## ${UI.logo} Portefeuille • Économie` },
+      { type: 10, content: `${UI.arrow} ${target} possède actuellement **__${euros(coins)}__**.\n\n> Gagnez entre **1 et 10 €** grâce à vos messages, selon leur longueur, et **1 € toutes les 15 secondes** en salon vocal.` },
       { type: 10, content: `-# Utilisez \`${prefix}shop\` pour consulter les rôles disponibles.` }
     ] }], true);
   }
   if (command === 'shop') {
     const items = shopItems(guild.id);
-    if (!items.length) return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Boutique • Nancy Coins` }, { type: 10, content: `${UI.arrow} La boutique ne contient pas encore de rôle.\n\n> Un administrateur peut ajouter un rôle avec \`${prefix}shoprole <rôle> <prix>\`.` }] }], true);
+    if (!items.length) return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Boutique • Économie` }, { type: 10, content: `${UI.arrow} La boutique ne contient pas encore de rôle.\n\n> Un administrateur peut ajouter un rôle avec \`${prefix}shoprole <rôle> <prix>\`.` }] }], true);
     const lines = await Promise.all(items.map(async item => {
       const role = await guild.roles.fetch(item.role_id).catch(() => null);
-      return role ? `${UI.arrow} ${role} — **__${item.price.toLocaleString('fr-FR')} N-Coins__**` : null;
+      return role ? `${UI.arrow} ${role} — **__${euros(item.price)}__**` : null;
     }));
     return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
-      { type: 10, content: `## ${UI.logo} Boutique officielle • Nancy Coins` },
+      { type: 10, content: `## ${UI.logo} Boutique officielle • Économie` },
       { type: 10, content: `${UI.arrow} Découvrez les rôles disponibles à l’achat. Chaque rôle est définitivement attribué après validation de votre paiement.` },
       { type: 14, divider: true, spacing: 1 },
       { type: 10, content: lines.filter(Boolean).join('\n') || 'Aucun rôle disponible.' },
@@ -371,11 +372,11 @@ async function execute(ctx, command, args, slash = false) {
     if (member.roles.cache.has(role.id)) return reply(ctx, 'Vous possédez déjà ce rôle.', true);
     if (!role.editable) return reply(ctx, 'Je ne peux pas attribuer ce rôle. Placez mon rôle au-dessus de celui-ci.', true);
     const wallet = levelRecord(guild.id, member.id);
-    if (wallet.ncoins < item.price) return reply(ctx, `Solde insuffisant : ${item.price - wallet.ncoins} N-Coins manquants.`, true);
+    if (wallet.ncoins < item.price) return reply(ctx, `Solde insuffisant : il vous manque ${euros(item.price - wallet.ncoins)}.`, true);
     adjustCoins(guild.id, member.id, -item.price);
     try { await member.roles.add(role, `Achat boutique par ${actor.tag}`); }
-    catch { adjustCoins(guild.id, member.id, item.price); return reply(ctx, 'L’achat n’a pas pu être finalisé. Vos N-Coins ont été remboursés.', true); }
-    return reply(ctx, `Achat validé : rôle ${role.name} obtenu pour ${item.price} N-Coins.`);
+    catch { adjustCoins(guild.id, member.id, item.price); return reply(ctx, 'L’achat n’a pas pu être finalisé. Votre argent a été remboursé.', true); }
+    return reply(ctx, `Achat validé : rôle ${role.name} obtenu pour ${euros(item.price)}.`);
   }
   if (command === 'shoprole') {
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]);
@@ -383,7 +384,7 @@ async function execute(ctx, command, args, slash = false) {
     const role = await guild.roles.fetch(roleId).catch(() => null);
     if (!role || role.managed || !role.editable || !Number.isInteger(price) || price < 1) return reply(ctx, 'Indiquez un rôle attribuable et un prix supérieur à 0.', true);
     levelsDb.prepare(`INSERT INTO shop_roles (guild_id, role_id, price) VALUES (?, ?, ?) ON CONFLICT(guild_id, role_id) DO UPDATE SET price = excluded.price`).run(guild.id, role.id, price);
-    return reply(ctx, `Boutique mise à jour : ${role.name} coûte désormais ${price} N-Coins.`);
+    return reply(ctx, `Boutique mise à jour : ${role.name} coûte désormais ${euros(price)}.`);
   }
   if (command === 'stats' || command === 'statistique') {
     const joins = weeklyMetric(guild.id, 'joins'); const messages = weeklyMetric(guild.id, 'messages'); const voice = weeklyMetric(guild.id, 'voice_seconds');
