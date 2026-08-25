@@ -58,6 +58,21 @@ levelsDb.exec(`
     user_id TEXT NOT NULL,
     PRIMARY KEY (giveaway_id, user_id)
   )
+  ;CREATE TABLE IF NOT EXISTS boost_roles (
+    guild_id TEXT NOT NULL,
+    role_id TEXT NOT NULL,
+    boost_type TEXT NOT NULL,
+    multiplier REAL NOT NULL,
+    PRIMARY KEY (guild_id, role_id, boost_type)
+  )
+  ;CREATE TABLE IF NOT EXISTS temporary_boosts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    boost_type TEXT NOT NULL,
+    multiplier REAL NOT NULL,
+    expires_at INTEGER NOT NULL
+  )
 `);
 const levelColumns = levelsDb.prepare('PRAGMA table_info(member_levels)').all().map(column => column.name);
 if (!levelColumns.includes('ncoins')) levelsDb.exec('ALTER TABLE member_levels ADD COLUMN ncoins INTEGER NOT NULL DEFAULT 0');
@@ -99,6 +114,16 @@ function weeklyMetric(guildId, metricName) {
 function shopItems(guildId) { return levelsDb.prepare('SELECT role_id, price FROM shop_roles WHERE guild_id = ? ORDER BY price ASC').all(guildId); }
 function bar(value, maximum) { return value > 0 ? '▰'.repeat(Math.max(1, Math.round((value / Math.max(1, maximum)) * 10))) : '—'; }
 function euros(amount) { return `${Number(amount).toLocaleString('fr-FR')} €`; }
+function activeTemporaryBoosts(guildId, userId) {
+  levelsDb.prepare('DELETE FROM temporary_boosts WHERE expires_at <= ?').run(Date.now());
+  return levelsDb.prepare('SELECT boost_type, multiplier, expires_at FROM temporary_boosts WHERE guild_id = ? AND user_id = ? AND expires_at > ?').all(guildId, userId, Date.now());
+}
+function boostMultiplier(member, type) {
+  const roleBoosts = levelsDb.prepare('SELECT role_id, multiplier FROM boost_roles WHERE guild_id = ? AND boost_type = ?').all(member.guild.id, type);
+  const roleMultiplier = roleBoosts.filter(boost => member.roles.cache.has(boost.role_id)).reduce((best, boost) => Math.max(best, boost.multiplier), 1);
+  const temporaryMultiplier = activeTemporaryBoosts(member.guild.id, member.id).filter(boost => boost.boost_type === type).reduce((total, boost) => total * boost.multiplier, 1);
+  return roleMultiplier * temporaryMultiplier;
+}
 function migrateLegacyLevels() {
   for (const [guildId, guildConfig] of Object.entries(settings)) {
     for (const [userId, record] of Object.entries(guildConfig.levels?.users ?? {})) {
@@ -189,6 +214,7 @@ function helpComponents() { return [{ type: 17, accent_color: UI.white, componen
   { type: 10, content: `### <:Nancy24Photoroom:1541568231570014299> Modération\n\`> ${prefix}kick <membre> [raison]\` · \`${prefix}ban <membre> [raison]\` · \`${prefix}mute <membre> <durée> [raison]\`\n\`${prefix}unmute <membre>\` · \`${prefix}clear <1-100>\` · \`${prefix}lock\` · \`${prefix}unlock\` · \`${prefix}slowmode <secondes>\`\nAntispam configurable : \`${prefix}antispam on [messages] [secondes] [timeout]\`.` },
   { type: 10, content: `### <:Nancy23Photoroom:1541568232756879370> Progression & économies\n\`${prefix}rank [membre]\` affiche une progression détaillée. \`${prefix}leaderboard\` affiche le **__top 10__** actualisé en direct.\nMessages : **__8 à 25 XP__** et **__1 à 10 €__** toutes les 20 secondes. Vocal : **__4 XP et 1 €__** toutes les 15 secondes.` },
   { type: 10, content: `### ${UI.logo} Boutique & statistiques\n\`${prefix}coins\` consulte votre portefeuille. \`${prefix}shop\` présente les rôles disponibles et \`${prefix}buy <rôle>\` confirme un achat.\n\`${prefix}stats\` affiche les graphiques d’activité du serveur.` },
+  { type: 10, content: `### ${UI.settings} Boosts\n\`${prefix}boostrole <rôle> <xp|money> <multiplicateur>\` configure un rôle boost.\n\`${prefix}boosttemp <membre> <xp|money> <multiplicateur> <durée>\` accorde un boost temporaire. \`${prefix}boosts\` affiche les boosts actifs.` },
   { type: 10, content: `### <:Nancy38Photoroom:1541568051579850882> Tickets\n Utilise le panneau dédié pour **__créer un ticket__**. Un staff peut **__fermer un ticket__** avec \`${prefix}ticketclose\`.` },
   { type: 10, content: `### ${UI.notice} Accès aux fonctionnalités\n> Les réglages sensibles sont réservés aux administrateurs. L’équipe staff dispose des outils de modération courants. Les commandes de consultation restent accessibles à tous.` },
   { type: 10, content: `### ${UI.bell} Giveaways\n> Les administrateurs et le rôle **Gérant giveaways** peuvent créer un tirage, suivre les participations et effectuer un reroll.` },
@@ -208,9 +234,10 @@ async function addXp(member, amount, coins = 0) {
   if (amount <= 0) return;
   const user = levelRecord(member.guild.id, member.id);
   const oldLevel = levelFromXp(user.xp);
-  const xp = Math.min(xpForLevel(maxLevel), user.xp + amount);
+  const xpMultiplier = boostMultiplier(member, 'xp'); const moneyMultiplier = boostMultiplier(member, 'money');
+  const xp = Math.min(xpForLevel(maxLevel), user.xp + Math.round(amount * xpMultiplier));
   const newLevel = levelFromXp(xp);
-  saveLevelRecord(member.guild.id, member.id, xp, user.last_message_at, user.ncoins + coins);
+  saveLevelRecord(member.guild.id, member.id, xp, user.last_message_at, user.ncoins + Math.round(coins * moneyMultiplier));
   if (newLevel > oldLevel) {
     await applyLevelRoles(member, newLevel);
     const levelChannelId = config(member.guild.id).levels.channelId;
@@ -434,6 +461,26 @@ async function execute(ctx, command, args, slash = false) {
   if (!has(member, command) && !giveawayException) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
+  if (command === 'boostrole') {
+    const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]); const type = slash ? ctx.options.getString('type') : args[1]; const multiplier = Number(slash ? ctx.options.getNumber('multiplicateur') : args[2]);
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!role || role.managed || !role.editable || !['xp', 'money'].includes(type) || !Number.isFinite(multiplier) || multiplier < 1.1 || multiplier > 10) return reply(ctx, 'Indiquez un rôle attribuable, un type valide et un multiplicateur de 1.1 à 10.', true);
+    levelsDb.prepare(`INSERT INTO boost_roles (guild_id, role_id, boost_type, multiplier) VALUES (?, ?, ?, ?) ON CONFLICT(guild_id, role_id, boost_type) DO UPDATE SET multiplier = excluded.multiplier`).run(guild.id, role.id, type, multiplier);
+    return reply(ctx, `Boost configuré : ${role.name} applique x${multiplier} sur ${type === 'xp' ? 'l’XP' : 'l’argent'}.`);
+  }
+  if (command === 'boosttemp') {
+    const target = slash ? await getMember(ctx.options.getUser('membre')?.id) : await getMember(args[0]); const type = slash ? ctx.options.getString('type') : args[1]; const multiplier = Number(slash ? ctx.options.getNumber('multiplicateur') : args[2]); const durationValue = slash ? ctx.options.getString('duree') : args[3]; const durationMs = duration(durationValue);
+    if (!target || !['xp', 'money'].includes(type) || !Number.isFinite(multiplier) || multiplier < 1.1 || multiplier > 10 || !durationMs) return reply(ctx, 'Usage : boosttemp <membre> <xp|money> <multiplicateur> <durée>.', true);
+    const expiresAt = Date.now() + durationMs;
+    levelsDb.prepare('INSERT INTO temporary_boosts (guild_id, user_id, boost_type, multiplier, expires_at) VALUES (?, ?, ?, ?, ?)').run(guild.id, target.id, type, multiplier, expiresAt);
+    return reply(ctx, `Boost temporaire : x${multiplier} ${type === 'xp' ? 'XP' : 'argent'} accordé à ${target.user.tag} jusqu’à <t:${Math.floor(expiresAt / 1000)}:R>.`);
+  }
+  if (command === 'boosts') {
+    const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member); if (!target) return reply(ctx, 'Membre introuvable.', true);
+    const temporary = activeTemporaryBoosts(guild.id, target.id); const roles = levelsDb.prepare('SELECT role_id, boost_type, multiplier FROM boost_roles WHERE guild_id = ?').all(guild.id).filter(boost => target.roles.cache.has(boost.role_id));
+    const lines = [...roles.map(boost => `Rôle : x${boost.multiplier} ${boost.boost_type === 'xp' ? 'XP' : 'argent'}`), ...temporary.map(boost => `Temporaire : x${boost.multiplier} ${boost.boost_type === 'xp' ? 'XP' : 'argent'} (finit <t:${Math.floor(boost.expires_at / 1000)}:R>)`)];
+    return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Boosts actifs` }, { type: 10, content: `${UI.arrow} ${target}\n\n${lines.length ? lines.map(line => `> ${line}`).join('\n') : '> Aucun boost actif.'}` }] }], true);
+  }
   if (command === 'giveawaymanager') {
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]); const role = await guild.roles.fetch(roleId).catch(() => null);
     if (!role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Choisissez un rôle dédié valide pour gérer les giveaways.', true);

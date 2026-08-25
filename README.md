@@ -51,6 +51,9 @@ Le bot peut être invité sur plusieurs serveurs : chaque serveur possède ses p
 | `/buy rôle` | `&buy <rôle>` | Acheter un rôle avec son argent |
 | `/shoprole rôle prix` | `&shoprole <rôle> <prix>` | Ajouter ou mettre à jour un rôle de boutique (admin) |
 | `/statistique` | `&stats` | Voir les graphiques d’activité du serveur |
+| `/boostrole rôle type multiplicateur` | `&boostrole <rôle> <xp|money> <multiplicateur>` | Configurer un rôle boost (admin) |
+| `/boosttemp membre type multiplicateur durée` | `&boosttemp <membre> <xp|money> <multiplicateur> <durée>` | Donner un boost temporaire (admin) |
+| `/boosts [membre]` | `&boosts [membre]` | Voir les boosts actifs |
 | `/giveawaymanager rôle` | `&giveawaymanager <rôle>` | Définir le rôle Gérant giveaways (admin) |
 | `/giveaway prix durée gagnants image` | `&giveaway <durée> <gagnants> <prix>` | Créer un giveaway |
 | `/reroll id` | `&reroll <id>` | Tirer de nouveaux gagnants après la fin |
@@ -88,6 +91,12 @@ Configurez les huit rôles avec `/levelrole` (ou `&levelrole`) : par exemple `/l
 Chaque message validé rapporte entre **1 et 10 €**, selon sa longueur. Le vocal rapporte **1 € toutes les 15 secondes**. Les rôles de boutique sont ajoutés par un administrateur avec `/shoprole role:@Rôle prix:500`. Les membres utilisent ensuite `/shop`, `/coins` et `/buy` pour consulter et acheter les rôles.
 
 Les XP, niveaux et soldes sont stockés dans `data/levels.sqlite`. Montez impérativement le volume Railway sur `/app/data` afin de les conserver entre les redéploiements.
+
+## Boosts XP et argent
+
+Un administrateur peut définir un rôle de boost depuis Discord : `/boostrole role:@VIP type:xp multiplicateur:2` donnera un gain d’XP x2 à tous les membres possédant le rôle VIP. Utilisez `type:money` pour un boost d’argent. Lorsqu’un membre a plusieurs rôles de boost du même type, seul le multiplicateur de rôle le plus élevé s’applique.
+
+Les boosts temporaires ne nécessitent pas de rôle et expirent automatiquement : `/boosttemp membre:@Joueur type:xp multiplicateur:2 duree:3h`. Les boosts temporaires du même type se cumulent entre eux et sont visibles avec `/boosts`.
 
 ## Giveaways
 
