@@ -108,7 +108,7 @@ Configurez aussi le salon réservé aux annonces avec `/levelchannel salon:#nive
 
 ## Accès aux commandes
 
-Les contrôles reposent sur les noms de rôle exacts **Administrateur** et **Équipe Staff** (la casse et les accents ne posent pas de problème). Le rôle Administrateur peut utiliser toutes les commandes. Équipe Staff peut utiliser les commandes de modération courantes : `ping`, `help`, `rank`, `leaderboard`, `kick`, `mute`, `unmute`, `clear`, `lock`, `unlock` et `slowmode`. Les réglages sensibles, le bannissement et la configuration des niveaux sont réservés aux administrateurs.
+Utilisez `/config` pour centraliser les rôles d’accès. Depuis cette commande, vous pouvez ajouter ou retirer plusieurs rôles **Administrateur du bot**, **Équipe staff**, **Gérant giveaways** et le rôle responsable de chaque type de ticket. Les rôles Administrateur du bot peuvent utiliser toutes les commandes ; les rôles Équipe staff reçoivent les commandes de modération classiques ; les rôles Gérant giveaways peuvent créer et reroll les giveaways. Le propriétaire du serveur et les utilisateurs possédant la permission Discord native **Administrateur** conservent toujours l’accès total pour éviter tout blocage de configuration.
 
 ## Système de tickets
 

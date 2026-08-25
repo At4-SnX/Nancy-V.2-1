@@ -84,6 +84,8 @@ const config = guildId => {
   guildConfig.levels ??= { roles: {}, channelId: null };
   guildConfig.levels.roles ??= {}; guildConfig.levels.channelId ??= null;
   guildConfig.antispam ??= { enabled: true, limit: 6, interval: 7, timeout: '10m' };
+  guildConfig.access ??= { adminRoleIds: [], staffRoleIds: [] };
+  guildConfig.access.adminRoleIds ??= []; guildConfig.access.staffRoleIds ??= [];
   return guildConfig;
 };
 function levelRecord(guildId, userId) {
@@ -174,9 +176,11 @@ function has(member, command) {
   if (['help', 'rank', 'leaderboard', 'coins', 'shop', 'stats', 'statistique'].includes(command)) return true;
   if (member.id === member.guild.ownerId) return true;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  const access = config(member.guild.id).access;
+  if (access.adminRoleIds.some(roleId => member.roles.cache.has(roleId))) return true;
   const names = member.roles.cache.map(role => roleName(role.name));
   if (names.includes('administrateur')) return true;
-  return isStaffMember(member) && staffCommands.has(command);
+  return (access.staffRoleIds.some(roleId => member.roles.cache.has(roleId)) || isStaffMember(member)) && staffCommands.has(command);
 }
 function ticketConfig(guildId) {
   const tickets = config(guildId).tickets ??= { roles: {}, categoryId: null, open: {} };
@@ -188,12 +192,12 @@ function lockConfig(guildId) {
   return locks;
 }
 function giveawayConfig(guildId) {
-  const giveaways = config(guildId).giveaways ??= { managerRoleId: null };
-  giveaways.managerRoleId ??= null;
+  const giveaways = config(guildId).giveaways ??= { managerRoleIds: [] };
+  giveaways.managerRoleIds ??= giveaways.managerRoleId ? [giveaways.managerRoleId] : [];
   return giveaways;
 }
 function canManageGiveaways(member) {
-  return has(member, 'giveawaymanager') || (giveawayConfig(member.guild.id).managerRoleId && member.roles.cache.has(giveawayConfig(member.guild.id).managerRoleId));
+  return has(member, 'giveawaymanager') || giveawayConfig(member.guild.id).managerRoleIds?.some(roleId => member.roles.cache.has(roleId)) || (giveawayConfig(member.guild.id).managerRoleId && member.roles.cache.has(giveawayConfig(member.guild.id).managerRoleId));
 }
 function ticketCategoryId(tickets, type) {
   return process.env[ticketCategoryVariables[type]]?.trim() || process.env.TICKET_CATEGORY_ID?.trim() || tickets.categoryId;
@@ -377,7 +381,7 @@ async function respondGiveawayButton(interaction, action, id) {
   }
   if (action === 'reroll') {
     if (!giveaway.ended) return interaction.reply({ content: compact('Le reroll est disponible une fois le giveaway terminé.'), ephemeral: true });
-    if (interaction.user.id !== giveaway.organizer_id && !has(interaction.member, 'giveawaymanager')) return interaction.reply({ content: compact('Seul l’organisateur ou un administrateur peut effectuer un reroll.'), ephemeral: true });
+    if (interaction.user.id !== giveaway.organizer_id && !canManageGiveaways(interaction.member)) return interaction.reply({ content: compact('Seul l’organisateur, un administrateur ou un gérant giveaways peut effectuer un reroll.'), ephemeral: true });
     const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
     levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
     return interaction.reply({
@@ -461,6 +465,19 @@ async function execute(ctx, command, args, slash = false) {
   if (!has(member, command) && !giveawayException) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
+  if (command === 'config') {
+    const action = slash ? ctx.options.getString('action') : args[0]; const type = slash ? ctx.options.getString('type') : args[1]; const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[2]);
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!['add', 'remove'].includes(action) || !role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Usage : config <add|remove> <type> <rôle dédié>.', true);
+    const add = action === 'add'; const updateList = list => add ? [...new Set([...list, role.id])] : list.filter(id => id !== role.id);
+    if (type === 'admin') config(guild.id).access.adminRoleIds = updateList(config(guild.id).access.adminRoleIds);
+    else if (type === 'staff') config(guild.id).access.staffRoleIds = updateList(config(guild.id).access.staffRoleIds);
+    else if (type === 'giveaway') giveawayConfig(guild.id).managerRoleIds = updateList(giveawayConfig(guild.id).managerRoleIds);
+    else if (type?.startsWith('ticket_') && ticketTypes[type.slice(7)]) {
+      const ticketType = type.slice(7); if (add) ticketConfig(guild.id).roles[ticketType] = role.id; else if (ticketConfig(guild.id).roles[ticketType] === role.id) delete ticketConfig(guild.id).roles[ticketType];
+    } else return reply(ctx, 'Type de configuration invalide.', true);
+    save(); return reply(ctx, `Configuration mise à jour : ${role.name} a été ${add ? 'ajouté' : 'retiré'} pour ${type}.`);
+  }
   if (command === 'boostrole') {
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]); const type = slash ? ctx.options.getString('type') : args[1]; const multiplier = Number(slash ? ctx.options.getNumber('multiplicateur') : args[2]);
     const role = await guild.roles.fetch(roleId).catch(() => null);
@@ -484,7 +501,7 @@ async function execute(ctx, command, args, slash = false) {
   if (command === 'giveawaymanager') {
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[0]); const role = await guild.roles.fetch(roleId).catch(() => null);
     if (!role || role.managed || role.id === guild.roles.everyone.id) return reply(ctx, 'Choisissez un rôle dédié valide pour gérer les giveaways.', true);
-    giveawayConfig(guild.id).managerRoleId = role.id; save(); return reply(ctx, `Le rôle ${role.name} peut désormais gérer les giveaways.`);
+    giveawayConfig(guild.id).managerRoleIds = [...new Set([...giveawayConfig(guild.id).managerRoleIds, role.id])]; save(); return reply(ctx, `Le rôle ${role.name} peut désormais gérer les giveaways.`);
   }
   if (command === 'giveaway') {
     if (!canManageGiveaways(member)) return reply(ctx, 'Seul un administrateur ou le rôle Gérant giveaways peut créer un giveaway.', true);
@@ -499,7 +516,7 @@ async function execute(ctx, command, args, slash = false) {
     const id = slash ? ctx.options.getString('id') : args[0]; const giveaway = giveawayById(id);
     if (!giveaway || giveaway.guild_id !== guild.id) return reply(ctx, 'Giveaway introuvable.', true);
     if (!giveaway.ended) return reply(ctx, 'Le giveaway doit être terminé avant un reroll.', true);
-    if (actor.id !== giveaway.organizer_id && !has(member, 'giveawaymanager')) return reply(ctx, 'Seul l’organisateur ou un administrateur peut effectuer un reroll.', true);
+    if (actor.id !== giveaway.organizer_id && !canManageGiveaways(member)) return reply(ctx, 'Seul l’organisateur, un administrateur ou un gérant giveaways peut effectuer un reroll.', true);
     const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
     levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
     const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null);
