@@ -41,5 +41,11 @@ const commands = [
 if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) throw new Error('DISCORD_TOKEN et CLIENT_ID sont requis dans .env');
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 const route = process.env.GUILD_ID ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID) : Routes.applicationCommands(process.env.CLIENT_ID);
-await rest.put(route, { body: commands });
-console.log(`${commands.length} commandes ${process.env.GUILD_ID ? `déployées sur le serveur ${process.env.GUILD_ID}` : 'déployées globalement'}.`);
+try {
+  await rest.put(route, { body: commands });
+  console.log(`${commands.length} commandes ${process.env.GUILD_ID ? `déployées sur le serveur ${process.env.GUILD_ID}` : 'déployées globalement'}.`);
+} catch (error) {
+  console.error('Échec du déploiement des commandes Discord.');
+  console.error(`HTTP ${error.status ?? 'inconnu'} • code ${error.code ?? 'inconnu'} • ${error.rawError?.message ?? error.message}`);
+  throw error;
+}
