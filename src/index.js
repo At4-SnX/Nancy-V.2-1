@@ -312,7 +312,15 @@ async function endGiveaway(id) {
   levelsDb.prepare('UPDATE giveaways SET ended = 1, winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id);
   const updated = giveawayById(id); await refreshGiveaway(updated);
   const channel = await client.channels.fetch(updated.channel_id).catch(() => null);
-  if (channel?.isTextBased()) await channel.send({ content: compact(`Giveaway terminé — ${winners.length ? `gagnant(s) : ${winners.map(winner => `<@${winner}>`).join(', ')}` : 'aucun participant.'}`), allowedMentions: { parse: [] } }).catch(() => {});
+  if (channel?.isTextBased()) await channel.send({
+    flags: 32_768,
+    allowedMentions: { parse: [], users: [] },
+    components: [{ type: 17, accent_color: UI.white, components: [
+      { type: 10, content: `## ${UI.logo} Giveaway • Résultat officiel` },
+      { type: 10, content: `${UI.arrow} Le giveaway **__${updated.prize}__** est désormais terminé.\n\n> Gagnant(s) : ${winners.length ? winners.map(winner => `<@${winner}>`).join(' • ') : 'aucun participant éligible.'}` },
+      { type: 10, content: '-# Félicitations aux gagnants et merci à tous les participants.' }
+    ] }]
+  }).catch(() => {});
 }
 function scheduleGiveaway(id, endsAt) { const remaining = endsAt - Date.now(); if (remaining <= 0) return endGiveaway(id); setTimeout(() => scheduleGiveaway(id, endsAt), Math.min(remaining, 2_147_000_000)); }
 async function createGiveaway(guild, channel, organizer, prize, durationMs, winnerCount, imageUrl) {
@@ -343,7 +351,15 @@ async function respondGiveawayButton(interaction, action, id) {
     if (interaction.user.id !== giveaway.organizer_id && !has(interaction.member, 'giveawaymanager')) return interaction.reply({ content: compact('Seul l’organisateur ou un administrateur peut effectuer un reroll.'), ephemeral: true });
     const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
     levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
-    return interaction.reply({ content: compact(`Reroll effectué — gagnant(s) : ${winners.length ? winners.map(winner => `<@${winner}>`).join(', ') : 'aucun participant.'}`), ephemeral: true, allowedMentions: { parse: [] } });
+    return interaction.reply({
+      flags: 32_768,
+      allowedMentions: { parse: [], users: [] },
+      components: [{ type: 17, accent_color: UI.white, components: [
+        { type: 10, content: `## ${UI.logo} Giveaway • Reroll officiel` },
+        { type: 10, content: `${UI.arrow} Un nouveau tirage a été effectué pour le lot **__${giveaway.prize}__**.\n\n> Nouveau(x) gagnant(s) : ${winners.length ? winners.map(winner => `<@${winner}>`).join(' • ') : 'aucun participant éligible.'}` },
+        { type: 10, content: `-# Reroll demandé par ${interaction.user}.` }
+      ] }]
+    });
   }
   if (giveaway.ended) return interaction.reply({ content: compact('Ce giveaway est terminé.'), ephemeral: true });
   if (action === 'join') levelsDb.prepare('INSERT OR IGNORE INTO giveaway_participants (giveaway_id, user_id) VALUES (?, ?)').run(id, interaction.user.id);
@@ -437,7 +453,17 @@ async function execute(ctx, command, args, slash = false) {
     if (actor.id !== giveaway.organizer_id && !has(member, 'giveawaymanager')) return reply(ctx, 'Seul l’organisateur ou un administrateur peut effectuer un reroll.', true);
     const winners = chooseWinners(giveawayParticipants(id), giveaway.winner_count, JSON.parse(giveaway.winners_json || '[]'));
     levelsDb.prepare('UPDATE giveaways SET winners_json = ? WHERE id = ?').run(JSON.stringify(winners), id); await refreshGiveaway(giveawayById(id));
-    return reply(ctx, `Reroll effectué : ${winners.length ? winners.join(', ') : 'aucun participant.'}`);
+    const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null);
+    if (channel?.isTextBased()) await channel.send({
+      flags: 32_768,
+      allowedMentions: { parse: [], users: [] },
+      components: [{ type: 17, accent_color: UI.white, components: [
+        { type: 10, content: `## ${UI.logo} Giveaway • Reroll officiel` },
+        { type: 10, content: `${UI.arrow} Un nouveau tirage a été effectué pour le lot **__${giveaway.prize}__**.\n\n> Nouveau(x) gagnant(s) : ${winners.length ? winners.map(winner => `<@${winner}>`).join(' • ') : 'aucun participant éligible.'}` },
+        { type: 10, content: `-# Reroll demandé par ${actor}.` }
+      ] }]
+    });
+    return reply(ctx, 'Reroll publié dans le salon du giveaway.', true);
   }
   if (command === 'ping') return reply(ctx, `Bot opérationnel — latence : ${client.ws.ping} ms.`, true);
   if (command === 'help') return v2Reply(ctx, helpComponents(), true, [new AttachmentBuilder('assets/help.gif', { name: 'help.gif' })]);
