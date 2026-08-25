@@ -177,7 +177,7 @@ function ticketPanel() {
   return {
     flags: 32_768,
     components: [{ type: 17, accent_color: 0xFFFFFF, components: [
-      { type: 10, content: '## <:Nancy24Photoroom:1541568231570014299> Centre de support • Nancy RP V.2' },
+      { type: 10, content: '## <:Nancy26Photoroom:1541568067836973096> Centre de support • Nancy RP V.2' },
       { type: 10, content: ticketIntroduction },
       { type: 12, items: [{ media: { url: 'attachment://ticket.gif' } }] },
       { type: 14, divider: true, spacing: 1 },
@@ -311,7 +311,7 @@ async function execute(ctx, command, args, slash = false) {
     const roleId = slash ? ctx.options.getRole('role')?.id : targetId(args[1]);
     if (!levelMilestones.includes(level) || !roleId) return reply(ctx, 'Usage : levelrole <1|10|20|30|40|50|60|70> <rôle>', true);
     const role = await guild.roles.fetch(roleId).catch(() => null);
-    if (!role || role.managed || !role.editable) return reply(ctx, 'Ce rôle est introuvable ou je ne peux pas l’attribuer. Place mon rôle au-dessus.', true);
+    if (!role || role.managed || !role.editable) return reply(ctx, 'Ce rôle est introuvable ou je ne peux pas l’attribuer.', true);
     config(guild.id).levels.roles[level] = role.id; save();
     for (const cachedMember of guild.members.cache.values()) {
       const xp = config(guild.id).levels.users[cachedMember.id]?.xp ?? 0;
@@ -396,8 +396,8 @@ client.on(Events.InteractionCreate, async i => {
       if (!staffMembers.length) return i.reply({ content: 'Aucun membre avec le rôle Équipe Staff n’est disponible.', ephemeral: true });
       return i.reply({
         flags: 32_832,
-        components: [{ type: 17, accent_color: 0x1e4d70, components: [
-          { type: 10, content: '## Signalement d’un membre du staff' },
+        components: [{ type: 17, accent_color: 0xFFFFFF, components: [
+          { type: 10, content: '## <:Nancy46Photoroom:1541572047564439593> Signalement d’un membre du staff' },
           { type: 10, content: 'Sélectionne le ou les membres possédant le rôle **Équipe Staff** que tu souhaites signaler.' },
           { type: 1, components: [{ type: 3, custom_id: 'ticket:staff-targets', placeholder: 'Sélectionner un ou plusieurs staffs', min_values: 1, max_values: staffMembers.length, options: staffMembers.map(member => ({ label: member.displayName.slice(0, 100), description: member.user.tag.slice(0, 100), value: member.id })) }] }
         ] }]
