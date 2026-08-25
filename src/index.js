@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { AttachmentBuilder, AuditLogEvent, ChannelType, Client, EmbedBuilder, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 const prefix = process.env.PREFIX || '&';
 const UI = {
@@ -14,16 +15,46 @@ const UI = {
 };
 const settingsPath = path.resolve('data/settings.json');
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+const levelsDb = new DatabaseSync(path.resolve('data/levels.sqlite'));
+levelsDb.exec(`
+  CREATE TABLE IF NOT EXISTS member_levels (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    xp INTEGER NOT NULL DEFAULT 0,
+    last_message_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, user_id)
+  )
+`);
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { /* first boot */ }
 const save = () => fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 const config = guildId => {
   const guildConfig = settings[guildId] ??= { antibot: false, antinuke: { enabled: false, threshold: 3, action: 'strip' } };
-  guildConfig.levels ??= { roles: {}, users: {}, channelId: null };
-  guildConfig.levels.roles ??= {}; guildConfig.levels.users ??= {}; guildConfig.levels.channelId ??= null;
+  guildConfig.levels ??= { roles: {}, channelId: null };
+  guildConfig.levels.roles ??= {}; guildConfig.levels.channelId ??= null;
   guildConfig.antispam ??= { enabled: true, limit: 6, interval: 7, timeout: '10m' };
   return guildConfig;
 };
+function levelRecord(guildId, userId) {
+  return levelsDb.prepare('SELECT xp, last_message_at FROM member_levels WHERE guild_id = ? AND user_id = ?').get(guildId, userId) ?? { xp: 0, last_message_at: 0 };
+}
+function saveLevelRecord(guildId, userId, xp, lastMessageAt) {
+  levelsDb.prepare(`INSERT INTO member_levels (guild_id, user_id, xp, last_message_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp, last_message_at = excluded.last_message_at`).run(guildId, userId, xp, lastMessageAt);
+}
+function leaderboardRecords(guildId) {
+  return levelsDb.prepare('SELECT user_id, xp FROM member_levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 10').all(guildId);
+}
+function migrateLegacyLevels() {
+  for (const [guildId, guildConfig] of Object.entries(settings)) {
+    for (const [userId, record] of Object.entries(guildConfig.levels?.users ?? {})) {
+      levelsDb.prepare('INSERT OR IGNORE INTO member_levels (guild_id, user_id, xp, last_message_at) VALUES (?, ?, ?, ?)').run(guildId, userId, record.xp ?? 0, record.lastMessageAt ?? 0);
+    }
+    if (guildConfig.levels?.users) delete guildConfig.levels.users;
+  }
+  save();
+}
+migrateLegacyLevels();
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildVoiceStates],
@@ -76,7 +107,8 @@ function ticketCategoryId(tickets, type) {
   return process.env[ticketCategoryVariables[type]]?.trim() || process.env.TICKET_CATEGORY_ID?.trim() || tickets.categoryId;
 }
 async function log(guild, text) { const channel = process.env.LOG_CHANNEL_ID && guild.channels.cache.get(process.env.LOG_CHANNEL_ID); if (channel?.isTextBased()) await channel.send({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(text).setTimestamp()] }).catch(() => {}); }
-async function reply(ctx, text, ephemeral = false) { return ctx.reply({ content: text, ephemeral }).catch(() => ctx.channel?.send(text)); }
+function compact(text) { return `\`${String(text).replace(/`/g, '´').replace(/\s+/g, ' ').trim()}\``; }
+async function reply(ctx, text, ephemeral = false) { const content = compact(text); return ctx.reply({ content, ephemeral }).catch(() => ctx.channel?.send({ content })); }
 async function v2Reply(ctx, components, ephemeral = false) {
   const payload = { flags: 32_768 | (ephemeral && ctx.isChatInputCommand?.() ? 64 : 0), components };
   return ctx.reply(payload).catch(() => ctx.channel?.send({ flags: 32_768, components }));
@@ -104,10 +136,11 @@ async function applyLevelRoles(member, level) {
 }
 async function addXp(member, amount) {
   if (amount <= 0) return;
-  const user = config(member.guild.id).levels.users[member.id] ??= { xp: 0, lastMessageAt: 0 };
+  const user = levelRecord(member.guild.id, member.id);
   const oldLevel = levelFromXp(user.xp);
-  user.xp = Math.min(xpForLevel(maxLevel), user.xp + amount);
-  const newLevel = levelFromXp(user.xp); save();
+  const xp = Math.min(xpForLevel(maxLevel), user.xp + amount);
+  const newLevel = levelFromXp(xp);
+  saveLevelRecord(member.guild.id, member.id, xp, user.last_message_at);
   if (newLevel > oldLevel) {
     await applyLevelRoles(member, newLevel);
     const levelChannelId = config(member.guild.id).levels.channelId;
@@ -149,11 +182,7 @@ async function enforceAntiSpam(message) {
   const timeoutMs = duration(anti.timeout) ?? 600_000;
   if (message.member.moderatable) await message.member.timeout(timeoutMs, `Antispam : ${anti.limit} messages en ${anti.interval} secondes`).catch(() => {});
   await log(message.guild, `**ANTISPAM** — ${message.author.tag} sanctionné après ${anti.limit} messages en ${anti.interval} secondes.`);
-  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: UI.white, components: [
-    { type: 10, content: `## ${UI.notice} Protection antispam` },
-    { type: 10, content: `${UI.arrow} ${message.author}, votre activité a dépassé la limite de messages autorisée. Une mesure de modération temporaire de **${anti.timeout}** a été appliquée.\n\n> Merci de patienter avant de reprendre la conversation afin de préserver la lisibilité du salon.` },
-    { type: 10, content: `-# Paramètre actif : ${anti.limit} messages sur ${anti.interval} secondes.` }
-  ] }] }).catch(() => null);
+  const warning = await message.channel.send({ content: compact(`${message.author.tag} : antispam détecté, timeout de ${anti.timeout} appliqué.`) }).catch(() => null);
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
 }
@@ -163,11 +192,7 @@ async function enforceAntiLink(message) {
   if (!forbidden) return false;
   await message.delete().catch(() => {});
   await log(message.guild, `**ANTILIEN** — Message de ${message.author.tag} supprimé : lien non autorisé.`);
-  const warning = await message.channel.send({ flags: 32_768, components: [{ type: 17, accent_color: UI.white, components: [
-    { type: 10, content: `## ${UI.notice} Invitation Discord non autorisée` },
-    { type: 10, content: `${UI.arrow} ${message.author}, les invitations **discord.gg/** ne sont pas autorisées sur Nancy RP V.2. Votre message a été retiré automatiquement.\n\n> Les autres liens restent autorisés conformément aux règles du serveur.` },
-    { type: 10, content: '-# Protection automatique • Nancy RP V.2' }
-  ] }] }).catch(() => null);
+  const warning = await message.channel.send({ content: compact(`${message.author.tag} : invitation discord.gg supprimée automatiquement.`) }).catch(() => null);
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 12_000);
   return true;
 }
@@ -248,12 +273,12 @@ async function execute(ctx, command, args, slash = false) {
   if (!has(member, command)) return reply(ctx, 'Vous n’avez pas la permission nécessaire.', true);
   const reason = slash ? ctx.options.getString('raison') : args.slice(command === 'mute' ? 2 : 1).join(' ');
   const getMember = async value => guild.members.fetch(targetId(value)).catch(() => null);
-  if (command === 'ping') return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.settings} Nancy RP V.2 • État du système` }, { type: 10, content: `${UI.arrow} Le bot est connecté et pleinement opérationnel.\n\n> Latence actuelle : **${client.ws.ping} ms**` }, { type: 10, content: `-# ${UI.bell} Modération, tickets et progression sont disponibles.` }] }], true);
+  if (command === 'ping') return reply(ctx, `Bot opérationnel — latence : ${client.ws.ping} ms.`, true);
   if (command === 'help') return v2Reply(ctx, helpComponents(), true);
   if (command === 'rank') {
     const target = slash ? (ctx.options.getMember('membre') ?? member) : (args[0] ? await getMember(args[0]) : member);
     if (!target) return reply(ctx, 'Membre introuvable.', true);
-    const xp = config(guild.id).levels.users[target.id]?.xp ?? 0;
+    const xp = levelRecord(guild.id, target.id).xp;
     const level = levelFromXp(xp); const currentFloor = xpForLevel(level); const next = level >= maxLevel ? null : xpForLevel(level + 1);
     const ratio = next ? (xp - currentFloor) / (next - currentFloor) : 1;
     return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
@@ -264,12 +289,12 @@ async function execute(ctx, command, args, slash = false) {
     ] }], true);
   }
   if (command === 'leaderboard') {
-    const users = Object.entries(config(guild.id).levels.users).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
+    const users = leaderboardRecords(guild.id);
     if (!users.length) return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [{ type: 10, content: `## ${UI.logo} Classement • Nancy RP V.2` }, { type: 10, content: `${UI.arrow} Aucun point d’expérience n’a encore été enregistré.\n\n> Participez aux échanges écrits et vocaux pour lancer votre progression.` }] }], true);
-    const lines = await Promise.all(users.map(async ([id, data], index) => {
-      const ranked = await guild.members.fetch(id).catch(() => null);
+    const lines = await Promise.all(users.map(async (data, index) => {
+      const ranked = await guild.members.fetch(data.user_id).catch(() => null);
       const medal = ['🥇', '🥈', '🥉'][index] ?? `**${index + 1}.**`;
-      return `${medal} **${ranked?.user.tag ?? `Utilisateur ${id}`}**\n> Niveau **${levelFromXp(data.xp)}** • **${data.xp.toLocaleString('fr-FR')} XP**`;
+      return `${medal} **${ranked?.user.tag ?? `Utilisateur ${data.user_id}`}**\n> Niveau **${levelFromXp(data.xp)}** • **${data.xp.toLocaleString('fr-FR')} XP**`;
     }));
     return v2Reply(ctx, [{ type: 17, accent_color: UI.white, components: [
       { type: 10, content: `## ${UI.logo} Classement officiel • Nancy RP V.2` },
@@ -324,7 +349,7 @@ async function execute(ctx, command, args, slash = false) {
     if (!role || role.managed || !role.editable) return reply(ctx, 'Ce rôle est introuvable ou je ne peux pas l’attribuer.', true);
     config(guild.id).levels.roles[level] = role.id; save();
     for (const cachedMember of guild.members.cache.values()) {
-      const xp = config(guild.id).levels.users[cachedMember.id]?.xp ?? 0;
+      const xp = levelRecord(guild.id, cachedMember.id).xp;
       if (!cachedMember.user.bot && levelFromXp(xp) >= level) await applyLevelRoles(cachedMember, level);
     }
     return reply(ctx, `Le rôle ${role} sera attribué au **niveau ${level}**.`);
@@ -430,9 +455,9 @@ client.on(Events.MessageCreate, async m => {
   if (await enforceAntiLink(m)) return;
   if (await enforceAntiSpam(m)) return;
   if (!m.content.startsWith(prefix) && m.content.trim().length >= 3) {
-    const user = config(m.guild.id).levels.users[m.author.id] ??= { xp: 0, lastMessageAt: 0 };
-    if (Date.now() - user.lastMessageAt >= 20_000) {
-      user.lastMessageAt = Date.now();
+    const user = levelRecord(m.guild.id, m.author.id);
+    if (Date.now() - user.last_message_at >= 20_000) {
+      saveLevelRecord(m.guild.id, m.author.id, user.xp, Date.now());
       const gained = Math.min(25, 8 + Math.floor(m.content.trim().length / 25));
       await addXp(m.member, gained);
     }
