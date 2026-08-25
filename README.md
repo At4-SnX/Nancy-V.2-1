@@ -6,7 +6,7 @@ Bot Discord de modération complet, avec commandes `/` et préfixe `&`.
 
 1. Installez Node.js 20 ou plus récent.
 2. Dans ce dossier, lancez `npm install`.
-3. Copiez `.env.example` en `.env`, puis renseignez le token, `CLIENT_ID` et `GUILD_ID`.
+3. Copiez `.env.example` en `.env`, puis renseignez le token et `CLIENT_ID`. Laissez `GUILD_ID` vide pour un bot multi-serveurs, ou renseignez-le uniquement pour tester sur un serveur précis.
 4. Dans le portail développeur Discord, activez **Server Members Intent** et **Message Content Intent** dans *Bot > Privileged Gateway Intents*.
 5. Invitez le bot avec les portées `bot` et `applications.commands`. Donnez-lui au minimum les permissions : gérer les salons, gérer les messages, expulser, bannir, modérer les membres, lire les journaux d'audit et gérer les rôles.
 6. Lancez `npm install`, puis `npm run deploy`, puis `npm start`.
@@ -23,7 +23,11 @@ Si Railway met le service en veille, utilisez une offre incluant un service touj
 
 Si une construction Railway échoue avec `EBUSY` sur `node_modules/.cache`, redéployez après avoir récupéré la dernière version de `railway.json`. Si le cache Railway reste verrouillé, ajoutez temporairement la variable Railway `NO_CACHE=1`, puis redéployez.
 
-Les réglages `antibot` et `antinuke` sont enregistrés dans `data/settings.json`. N'ajoutez jamais `.env` à Git.
+Les réglages, niveaux, monnaie, tickets et giveaways sont isolés par serveur et enregistrés dans `data/`. N'ajoutez jamais `.env` à Git.
+
+### Utilisation sur plusieurs serveurs
+
+Le bot peut être invité sur plusieurs serveurs : chaque serveur possède ses propres réglages, rôles de tickets, boutique, niveaux, monnaie, statistiques et giveaways. Pour publier les commandes slash globalement, laissez `GUILD_ID` vide dans Railway puis redéployez. Discord peut mettre jusqu’à une heure à afficher les commandes globales sur tous les serveurs. Le bot doit être invité avec les scopes `bot` et `applications.commands`.
 
 ## Commandes
 

@@ -34,7 +34,8 @@ const commands = [
   new SlashCommandBuilder().setName('help').setDescription('Voir les commandes de modération')
 ].map(c => c.toJSON());
 
-if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID || !process.env.GUILD_ID) throw new Error('DISCORD_TOKEN, CLIENT_ID et GUILD_ID sont requis dans .env');
+if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) throw new Error('DISCORD_TOKEN et CLIENT_ID sont requis dans .env');
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
-console.log(`${commands.length} commandes déployées.`);
+const route = process.env.GUILD_ID ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID) : Routes.applicationCommands(process.env.CLIENT_ID);
+await rest.put(route, { body: commands });
+console.log(`${commands.length} commandes ${process.env.GUILD_ID ? `déployées sur le serveur ${process.env.GUILD_ID}` : 'déployées globalement'}.`);
