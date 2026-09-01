@@ -151,11 +151,12 @@ const voiceSessions = new Map();
 const spamMessages = new Map();
 const ticketTypes = {
   fondation: 'Ticket Fondation', legal: 'Ticket Légal', illegal: 'Ticket Illégal', report_staff: 'Ticket report Staff',
-  report_joueur: 'Ticket Report Joueur', question: 'Ticket Question', unban: 'Ticket Unban', build: 'Ticket Build'
+  report_joueur: 'Ticket Report Joueur', question: 'Ticket Question', unban: 'Ticket Unban', build: 'Ticket Build', partenariat: 'Ticket Partenariat'
 };
 const ticketCategoryVariables = {
   fondation: 'TICKET_CATEGORY_FONDATION_ID', legal: 'TICKET_CATEGORY_LEGAL_ID', illegal: 'TICKET_CATEGORY_ILLEGAL_ID', report_staff: 'TICKET_CATEGORY_REPORT_STAFF_ID',
-  report_joueur: 'TICKET_CATEGORY_REPORT_JOUEUR_ID', question: 'TICKET_CATEGORY_QUESTION_ID', unban: 'TICKET_CATEGORY_UNBAN_ID', build: 'TICKET_CATEGORY_BUILD_ID'
+  report_joueur: 'TICKET_CATEGORY_REPORT_JOUEUR_ID', question: 'TICKET_CATEGORY_QUESTION_ID', unban: 'TICKET_CATEGORY_UNBAN_ID', build: 'TICKET_CATEGORY_BUILD_ID',
+  partenariat: 'TICKET_CATEGORY_PARTENARIAT_ID'
 };
 const giveawayEmoji = {
   reroll: { id: '1541827161319538770', name: 'Nancy50removebg' },
@@ -173,7 +174,7 @@ function targetId(value) { return value?.replace(/[<#@!>&]/g, ''); }
 function roleName(value) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function isStaffMember(member) { return member.roles.cache.some(role => roleName(role.name) === 'equipe staff'); }
 function has(member, command) {
-  if (['help', 'rank', 'leaderboard', 'coins', 'shop', 'stats', 'statistique'].includes(command)) return true;
+  if (['help', 'rank', 'leaderboard', 'coins', 'shop', 'buy', 'stats', 'statistique'].includes(command)) return true;
   if (member.id === member.guild.ownerId) return true;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   const access = config(member.guild.id).access;
@@ -307,7 +308,8 @@ const ticketIntroduction = [
   '> <:Nancy46Photoroom:1541572047564439593> **__Ticket Report Joueur__** : `Pour effectuer un signalement à l’encontre d’un joueur (règlement brisé, anti-jeu, non-respect du RP, etc., preuves à l’appui).`',
   '> <:Nancy47Photoroom:1541572046537105529> **__Ticket Question__** : `Si vous avez une interrogation générale sur le fonctionnement du serveur, le règlement ou besoin d’un renseignement.`',
   '> <:Nancy48Photoroom:1541572045467418766> **__Ticket Unban__** : `Pour contester une sanction et effectuer une demande de débannissement auprès de la modération.`',
-  '> <:Nancy49Photoroom:1541572044397748304> **__Ticket Build__** : `Pour toute demande concernant la construction, les bugs de mapping ou l’ajout/modification de structures.`'
+  '> <:Nancy49Photoroom:1541572044397748304> **__Ticket Build__** : `Pour toute demande concernant la construction, les bugs de mapping ou l’ajout/modification de structures.`',
+  '> <:Nancy46Photoroom:1541572047564439593> **__Ticket Partenariat__** : `Pour toute demande de partenariat, collaboration ou proposition entre serveurs/communautés.`'
 ].join('\n\n');
 
 function giveawayById(id) { return levelsDb.prepare('SELECT * FROM giveaways WHERE id = ?').get(id); }
@@ -736,7 +738,7 @@ async function execute(ctx, command, args, slash = false) {
 
 client.once(Events.ClientReady, c => {
   c.user.setPresence({
-    activities: [{ name: '.gg/nancyrp', type: ActivityType.Streaming, url: 'https://twitch.tv/nancyrp' }],
+    activities: [{ name: 'discord.gg/nancyrp', type: ActivityType.Streaming, url: 'https://twitch.tv/nancyrp' }],
     status: 'online'
   });
   console.log(`Connecté comme ${c.user.tag} • SQLite : ${sqlitePath}`);
